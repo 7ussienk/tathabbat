@@ -1,0 +1,14 @@
+# تثبّت — مدقق ذكي للرسائل الدينية المتداولة
+
+مشروع مشارك في «تحدي الذكاء الاصطناعي في خدمة المحتوى الإسلامي» 2026، مسار أدوات المعرفة والتحقق.
+
+> **حالة المستودع:** نسخة البداية (`v0-baseline`) قبل أيام التحدي. تحتوي التوثيق والبيانات الأولية فقط، ولا تحتوي كود المنتج. يبدأ البناء في 4 أكتوبر 2026.
+
+- المرجع الكامل للبناء: [`CLAUDE.md`](CLAUDE.md)
+- ملخص المشروع والمعايير: [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md)
+- القرارات: [`docs/DECISIONS.md`](docs/DECISIONS.md)
+- مجموعة الاختبار: [`eval/DATASET_GUIDE.md`](eval/DATASET_GUIDE.md)
+- سجل المصادر والتراخيص: [`SOURCES.md`](SOURCES.md)
+
+## نسبة نص القرآن
+نص القرآن الكريم المستخدم في التحقق من الآيات هو **Tanzil Quran Text (Uthmani, v1.1)** من مشروع [Tanzil](https://tanzil.net)، بترخيص Creative Commons Attribution 3.0، ويُستخدم حرفياً دون أي تعديل (الملف: `data/quran/quran-uthmani.txt`).

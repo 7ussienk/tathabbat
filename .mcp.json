@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "shamela": {
+      "type": "http",
+      "url": "https://shamela.link/mcp"
+    }
+  }
+}
