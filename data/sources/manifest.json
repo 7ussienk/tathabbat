@@ -12,7 +12,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "sahih-muslim",
@@ -26,7 +27,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "madhhab": "hadith_collection"
+    "madhhab": "hadith_collection",
+    "official_edition": "unknown"
   },
   {
     "id": "sunan-abi-dawud",
@@ -41,7 +43,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "sunan-tirmidhi",
@@ -56,7 +59,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "sunan-nasai",
@@ -71,7 +75,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "sunan-ibn-majah",
@@ -86,7 +91,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "muwatta-malik",
@@ -101,7 +107,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "musnad-ahmad",
@@ -116,7 +123,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "sunan-kubra-bayhaqi",
@@ -131,7 +139,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "maqasid-sakhawi",
@@ -145,7 +154,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "madhhab": "shafii"
+    "madhhab": "shafii",
+    "official_edition": "unknown"
   },
   {
     "id": "lisan-almizan",
@@ -159,7 +169,8 @@
     "license": "نص تراثي في الملك العام؛ الطبعة من المكتبة الشاملة (shamela.ws)؛ يُقتبس المتن فقط دون حواشي المحقق",
     "added_by": "human",
     "reviewed": false,
-    "deep_lookup_allowed": true
+    "deep_lookup_allowed": true,
+    "official_edition": "unknown"
   },
   {
     "id": "talkhis-habir",
@@ -174,7 +185,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "laali-masnua",
@@ -189,7 +201,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "ziyadat-mawdu",
@@ -204,7 +217,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "durar-muntathira",
@@ -219,7 +233,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "tanzih-shariah",
@@ -234,7 +249,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "kashf-khafa",
@@ -249,7 +265,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "shuab-iman",
@@ -264,7 +281,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "madkhal-bayhaqi",
@@ -279,7 +297,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "sharh-nawawi-muslim",
@@ -294,7 +313,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "adhkar-nawawi",
@@ -309,7 +329,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "mizan-itidal",
@@ -324,7 +345,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "asrar-marfua",
@@ -339,7 +361,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "nasb-raya",
@@ -354,7 +377,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "tamhid-ibn-abdulbarr",
@@ -369,7 +393,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "jami-bayan-ilm",
@@ -384,7 +409,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "mawdu-ibn-jawzi",
@@ -399,7 +425,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "ilal-mutanahiya",
@@ -414,7 +441,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "jami-ulum-hikam",
@@ -429,7 +457,8 @@
     "added_by": "human",
     "reviewed": false,
     "deep_lookup_allowed": true,
-    "edition_selection": "provisional"
+    "edition_selection": "provisional",
+    "official_edition": "unknown"
   },
   {
     "id": "quran-hafs",
@@ -470,8 +499,35 @@
     "title": "الموسوعة الحديثية - الدرر السنية",
     "type": "external_link_only",
     "origin_url": "https://dorar.net/hadith",
-    "license": "للتصفح عبر موقعهم فقط؛ ممنوع النسخ. يُستخدم رابط بحث للمستخدم فقط",
+    "license": "للتعرف على الحديث ومصدره فقط عبر واجهتهم الموثقة (dorar.net/article/389) عند الطلب؛ لا أحكام منها، ولا نسخ جماعي أو تخزين لبياناتها؛ مع رابط تحقق للمستخدم. تُوثَّق شروط الواجهة في SOURCES.md قبل أي استدعاء",
     "added_by": "human",
     "reviewed": true
+  },
+  {
+    "id": "svc-hadeethenc",
+    "title": "موسوعة الأحاديث النبوية (HadeethEnc)",
+    "type": "remote_service",
+    "origin_url": "https://hadeethenc.com/api-docs",
+    "license": "TODO: تُقرأ شروط واجهة HadeethEnc قبل أي استدعاء؛ الاستخدام المقرر: اقتراح البديل الصحيح بشرط مطابقة النص بنص الصحيحين عبر الشاملة",
+    "added_by": "human",
+    "reviewed": false
+  },
+  {
+    "id": "svc-islamiccontent-mcp",
+    "title": "خادم MCP لمنصات جمعية خدمة المحتوى الإسلامي باللغات (اختياري)",
+    "type": "remote_service",
+    "origin_url": "https://mcp.islamiccontent.org",
+    "license": "TODO: اختياري؛ يُختبر صباح الأحد 4 أكتوبر وتُقرأ شروطه قبل الاعتماد",
+    "added_by": "human",
+    "reviewed": false
+  },
+  {
+    "id": "ref-qurancomplex",
+    "title": "مجمع الملك فهد لطباعة المصحف الشريف — منصة المطورين",
+    "type": "external_link_only",
+    "origin_url": "https://qurancomplex.gov.sa/quran-dev/",
+    "license": "مرجع للمقارنة فقط (قارنّا نص Tanzil المحلي بنص المجمع في 2026-10-03)؛ لم يُنسخ منه شيء إلى المستودع؛ شروط الاستخدام غير مفصّلة في صفحة المطورين",
+    "added_by": "human",
+    "reviewed": false
   }
 ]

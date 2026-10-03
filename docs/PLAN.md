@@ -93,7 +93,7 @@ Dockerfile, docker-compose.yml, Caddyfile.example, LICENSE
 - إرسال `widespread.jsonl` و`dataset.jsonl` للمرشد.
 
 ### اليوم 1 — الأحد 4 أكتوبر: المرحلتان 0 و1
-- **صباحاً (9–12)**: spike File Search (R2؛ يُستبعد إن لم يُرجع النص) + spike الشاملة MCP العامة (R6: `shamela_verify_quote`، المهلة، حدود المعدل). ثم المرحلة 0: `create-next-app`، tsconfig strict، env، Zod schemas، `normalize.ts` + اختباراتها، تحقق manifest (يرفض `license` فارغ **أو** يبدأ بـ `TODO`)، `build-index.ts` (MiniSearch)، `upload-file-search.ts`، `gen-sources-md.ts`. commit.
+- **صباحاً (9–12)**: spike File Search (R2؛ يُستبعد إن لم يُرجع النص) + spike الشاملة MCP العامة (R6: `shamela_verify_quote`، المهلة، حدود المعدل). + اختبار اختياري لخادم MCP الجمعية (`mcp.islamiccontent.org`) وواجهة HadeethEnc للبديل الصحيح (بشرط مطابقة الصحيحين). ثم المرحلة 0: `create-next-app`، tsconfig strict، env، Zod schemas، `normalize.ts` + اختباراتها، تحقق manifest (يرفض `license` فارغ **أو** يبدأ بـ `TODO`)، `build-index.ts` (MiniSearch)، `upload-file-search.ts`، `gen-sources-md.ts`. commit.
 - **ظهراً/مساءً (12–22)**: المرحلة 1: LLMProvider+Gemini، الخطوات 2–7 نصاً فقط، `validate` مع اختبارات التخفيض ومنع المستوى د، `/api/verify`، `/api/health`. حالات يدوية من dataset. commit بعد كل خطوة كبيرة.
 - **المخرج**: ادعاء نصي ⇒ JSON بحكم موثق أو `no_origin_found`.
 
