@@ -26,7 +26,7 @@
 ### ما زال مفتوحاً
 - **O1:** مراجعة النسخ المؤقتة (`edition_selection:"provisional"`) كتاباً كتاباً أثناء الـ spike.
 - **O2:** التحقق من أن شروط الشاملة (تحدّ المعدل، ومعاينات البحث ليست دليلاً قبل فتح الصفحة) متوافقة مع تصميم البحث العميق: نعرض دائماً رابط الصفحة، ونلتزم بالمهلة والـ cache.
-- **O3:** اختيار الاستضافة: Vercel أم خادم خاص.
+- **O3:** (حُسم) الهدف Vercel، والخادم الخاص بديل موثق (القرار 59).
 
 ## 2. الأسلوب العام
 - Next.js 15 (App Router) + TypeScript strict + Tailwind، **npm**، Node 22 LTS.
@@ -43,8 +43,9 @@
 app/
   page.tsx                  الصفحة الرئيسية (إدخال + نتيجة)
   methodology/page.tsx      عن المنهجية
-  api/verify/route.ts       POST (maxDuration، مصادقة Bearer للبوت فقط)
-  api/health/route.ts
+  api/verify/route.ts       POST عام للواجهة (محدَّد المعدل لكل IP + سقف يومي)
+  api/machine/verify/route.ts   مسار آلي للتقييم (VERIFY_API_TOKEN)؛ الاسم مبدئي
+  api/health/route.ts       سطحي بلا Gemini؛ ?deep=1 ينادي الشاملة فقط
   layout.tsx, globals.css
 components/                 InputTabs, ClaimCard, VerdictBadge, LevelBadge, SourceQuote, GeneratedNote, CopyReply, Disclaimer, ErrorBox
 lib/
@@ -54,7 +55,9 @@ lib/
   llm/provider.ts           interface LLMProvider
   llm/gemini.ts             التنفيذ
   llm/mock.ts               للاختبارات
-  retrieval/{file-search,text-index,hybrid}.ts
+  retrieval/{text-index (MiniSearch على data/curated فقط), file-search (خطة بديلة موسومة)}.ts
+  ratelimit/{store,memory,upstash}.ts   واجهة RateLimitStore؛ الذاكرة افتراضياً وUpstash اختياري الاثنين
+  verify-message.ts         verifyMessage(): تنادي بها المسارات الثلاثة
   pipeline/{normalize-input,extract-claims,classify-level,retrieve,judge,validate,compose-reply}.ts
   pipeline/run.ts           المنسّق (تجميع 2+3، توازي لكل ادعاء، مهلة كلية)
   deep-lookup/{shamela-mcp,turath,cache,index}.ts
@@ -62,7 +65,7 @@ lib/
   telegram-format.ts
   log.ts                    سجلات تقنية بلا نص الرسالة
 data/ (sources/manifest.json، curated/، quran/ ← ملف Tanzil) + data/index/text-index.json (يُولَّد وقت `npm run build` ولا يُلتزم)
-scripts/{build-index,upload-file-search,gen-sources-md,validate-manifest}.ts
+scripts/{build-curated-index,gen-sources-md,validate-manifest}.ts   (+ upload-file-search.ts: خطة بديلة موسومة؛ لا سكربت يفهرس الكتب محلياً)
 eval/{run-eval.ts,report.md}
 integrations/n8n/tathabbat-telegram.json   (اختياري ومؤجَّل)
 app/api/telegram/route.ts   webhook تيليجرام المباشر
@@ -81,7 +84,7 @@ Dockerfile, docker-compose.yml, Caddyfile.example, LICENSE
 | R5 | `confidence` ذاتي من النموذج غير معاير | تُحسب برمجياً: (درجة التطابق النصي/الدلالي + نجاح التحقق + اتفاق الاثنين)، وتُستخدم مع `CONFIDENCE_THRESHOLD` |
 | R6 | الشاملة MCP العامة: شروط الاستخدام، حدود المعدل، التوفر، أسماء الأدوات | spike في اليوم 1؛ cache؛ مهلة؛ التراجع الآمن؛ توثيق الشروط في SOURCES.md. الأدوات المتاحة لي الآن تعمل على مكتبة محلية، فالتحقق من الخادم العام يتم يوم 4 |
 | R7 | تراث (turath) API غير موثق رسمياً | يُؤجَّل إلى آخر الأولويات (بعد الشاملة)؛ يُحذف دون أثر إن لم يتوفر |
-| R8 | حدود Vercel: مدة الدالة وحجم جسم الطلب (صوت/صورة) | خادم خاص هو الافتراضي؛ على Vercel: ضغط الصورة والصوت في المتصفح وتحديد الحجم، وتحقق من الحدود الحالية للخطة |
+| R8 | حدود Vercel: مدة الدالة وحجم جسم الطلب (صوت/صورة) | Vercel هو الهدف (القرار 59)؛ ضغط الصورة والصوت في المتصفح وتحديد الحجم؛ والتحقق من الحدود الحالية للخطة؛ الخادم الخاص بديل موثق |
 | R9 | التطبيع العربي يكسر مطابقة الاقتباس (ألفاظ مروية بالمعنى) | اختبارات وحدة بحالات وهمية؛ التحقق يقارن بعد التطبيع فقط، وعدم التطابق ⇒ تخفيض |
 | R10 | حقن أوامر (prompt injection) داخل نص الرسالة الواردة | الرسالة تُمرَّر كبيانات محددة بوسوم، المخرجات منظمة، والتحقق البرمجي يمنع أي مصدر غير مسترجع |
 | R11 | الصوت العامي (يمني/خليجي) وخطأ التفريغ | درجة وضوح + تعديل المستخدم قبل المتابعة؛ حد 85% في التقييم |
@@ -95,14 +98,14 @@ Dockerfile, docker-compose.yml, Caddyfile.example, LICENSE
 - إرسال `widespread.jsonl` و`dataset.jsonl` للمرشد.
 
 ### اليوم 1 — الأحد 4 أكتوبر: المرحلتان 0 و1
-- **صباحاً (9–12)**: spike File Search (R2؛ يُستبعد إن لم يُرجع النص) + spike الشاملة MCP العامة (R6: `shamela_verify_quote`، المهلة، حدود المعدل). + اختبار اختياري لخادم MCP الجمعية (`mcp.islamiccontent.org`) وواجهة HadeethEnc للبديل الصحيح (بشرط مطابقة الصحيحين). ثم المرحلة 0: `create-next-app`، tsconfig strict، env، Zod schemas، `normalize.ts` + اختباراتها، تحقق manifest (يرفض `license` فارغ **أو** يبدأ بـ `TODO`)، `build-index.ts` (MiniSearch)، `upload-file-search.ts`، `gen-sources-md.ts`. commit. + (حسب القرارات 47–48): اختبار تراث (قصر البحث على كتب، فصل المتن عن الحاشية) واختبار الاتصال بالشاملة **من Vercel نفسه** على 30 استدعاء (الزمن والنجاح) وإعداد تسخين دوري عبر `/api/health`.
+- **صباحاً (9–12)**: spike File Search (R2؛ يُستبعد إن لم يُرجع النص) + spike الشاملة MCP العامة (R6: `shamela_verify_quote`، المهلة، حدود المعدل). + اختبار اختياري لخادم MCP الجمعية (`mcp.islamiccontent.org`) وواجهة HadeethEnc للبديل الصحيح (بشرط مطابقة الصحيحين). ثم المرحلة 0: `create-next-app`، tsconfig strict، env، Zod schemas، `normalize.ts` + اختباراتها، تحقق manifest (يرفض `license` فارغ **أو** يبدأ بـ `TODO`)، `build-curated-index.ts` (MiniSearch على data/curated فقط)، `gen-sources-md.ts`. commit. + (حسب القرارات 47–48): اختبار تراث (قصر البحث على كتب، فصل المتن عن الحاشية) واختبار الاتصال بالشاملة **من Vercel نفسه** على 30 استدعاء (الزمن والنجاح) وإعداد تسخين دوري عبر `/api/health`.
 - **ظهراً/مساءً (12–22)**: المرحلة 1: LLMProvider+Gemini، الخطوات 2–7 نصاً فقط، `validate` مع اختبارات التخفيض ومنع المستوى د، `/api/verify`، `/api/health`. حالات يدوية من dataset. commit بعد كل خطوة كبيرة.
 - **المخرج**: ادعاء نصي ⇒ JSON بحكم موثق (`no_basis_per_scholar` منقولاً) أو `not_found_in_sources` امتناعاً.
 
 ### اليوم 2 — الاثنين 5 أكتوبر: المرحلتان 2 و3
 - **صباحاً**: الواجهة (RTL، جوال أولاً، داكن)، بطاقات الادعاءات، الرد الجاهز، صفحة المنهجية، رسائل الأخطاء، التنبيه الثابت.
 - **ظهراً**: خطوة 1 (صوت/صورة) + حقل تعديل التفريغ عند ضعف الوضوح. البحث العميق (Shamela) بقائمة بيضاء ومهلة وcache.
-- **مساءً**: `run-eval.ts` (3 تشغيلات، توازٍ محدود، تقرير)، أول تشغيل، معالجة الفشل في الحالات الحرجة أولاً.
+- **مساءً**: `run-eval.ts` (3 تشغيلات، توازٍ محدود، تقرير)، أول تشغيل، معالجة الفشل في الحالات الحرجة أولاً. + خمس حالات «تسرب» (القرار 61) وقياس بنمطين (مع/بدون `data/curated`).
 - **بعد المرحلة 2 (الواجهة):** لقطتا شاشة 390px وسطح مكتب، مع فحص RTL والتباين قبل المتابعة.
 
 ### اليوم 3 — الاثنين/الثلاثاء 6 أكتوبر: المرحلتان 4 و5 (حتى 11:59 م)
@@ -131,7 +134,7 @@ Dockerfile, docker-compose.yml, Caddyfile.example, LICENSE
 4. **الشاملة**: النتيجة من `foot` (الحاشية) لا تُعد حكماً.
 5. **الثقة (قرار 8):** `confidence = f(درجة الدمج الدلالي/النصي، تطابق الاقتباس، نجاح verify_quote)` بدالة بسيطة موثقة في METHODOLOGY، لا من النموذج.
 6. **التسجيل** (القاعدة 26): `{ts, duration_ms, input_type, claims_count, verdicts[], downgrades, tokens_in, tokens_out, cost_estimate}` فقط، ولا نص رسالة.
-7. **المصادقة**: `/api/verify` مفتوح للويب بتحديد معدل (rate limit) في الذاكرة، ويقبل Bearer للبوت.
+7. **المسارات والمصادقة** (القرار 57): `/api/verify` عام بتحديد معدل لكل IP وسقف يومي، و`/api/telegram` بالترويسة السرية، ومسار آلي بـ `VERIFY_API_TOKEN`؛ وكلها تنادي `verifyMessage()`. المحدد في الذاكرة خلف `RateLimitStore` (تقريبي لكل نسخة) مع سقف Google/الرصيد، وUpstash اختياري الاثنين.
 
 ## 7. ما اختلف في توثيق Gemini API (راجعته 2 أكتوبر 2026)
 
@@ -158,19 +161,26 @@ Dockerfile, docker-compose.yml, Caddyfile.example, LICENSE
 - **المرحلة 3 (eval):** حالات التسرب + القياس بنمطين (مع/بدون `data/curated`)؛ وعند ضعف الاسترجاع يُعرض خيار فهرسة المقاصد الحسنة وحدها وتُنتظر الموافقة.
 - **الحماية:** تحديد معدل لكل IP + سقف يومي + رسالة عند بلوغه على المسار العام؛ `VERIFY_API_TOKEN` لمسار الآلات؛ `TELEGRAM_WEBHOOK_SECRET` للـ webhook.
 
-## 10. تعارضات معلّقة بانتظار قرار صاحب المشروع
-لم تُحلّ هنا عمداً. (طُبّقت القرارات حيث كانت صريحة وحلّت محل نصوص قديمة، وهذه البنود هي ما بقي غامضاً أو متعارضاً.)
+### بوابة الأحد 9:15 (اتصال خادم الشاملة العام)
+**ما وُجد (3 أكتوبر، قراءة فقط):** `https://shamela.link/mcp` يرد 401 `missing authorization header` مع `WWW-Authenticate: Bearer resource_metadata=…`. بيانات الموارد المحمية تعلن خادم تفويض `https://shamela.link/api/auth` (OAuth 2.x بـ PKCE-S256 وDPoP اختياري). خادم التفويض يعلن: `authorization_code` و`refresh_token` (بنطاق `offline_access`) و`client_credentials`، وتسجيل عملاء ديناميكياً (`/oauth2/register`)، ومصادقة العميل بـ none/secret/private_key_jwt. **لا مفتاح ثابت ولا صفحة مطورين**؛ الصفحة الرئيسية تقول فقط «الصق العنوان ثم سجّل الدخول مرة واحدة». وشروط الموقع (`/terms`) تقول: «ولا تنسخ المكتبة كلها عبره» و«لا تُشغِّل عليه ما يستنزفه عن غيره» وأن الخادم يرفض الطلبات بأدب عند بلوغ طاقته. لم يوضع أي توكن في أي ملف أو في Vercel.
+- **البوابة:** نداء من **سكربت Node عادي بلا جلسة تفاعلية** (`MCP TypeScript SDK`) إلى `shamela_search_pages` و`shamela_get_page` و`shamela_verify_quote`. النجاح = أداء النداءات دون تدخل بشري ودون توكن مرتبط بحساب شخصي في الكود أو في Vercel.
+- **الخطة (ب) إن فشلت:** استخراج متن «المقاصد الحسنة» فقط (متن بلا حواشي المحقق، 20 صفحة لكل طلب، طلب واحد في كل مرة) بجلسة مصادقة صاحب المشروع، ثم رفعه إلى مخزن File Search **لا إلى Git**، **بشرط أن يعيد File Search نص المقطع المسترجع**. (تنبيه: شروط الموقع تمنع «نسخ المكتبة كلها»؛ والترخيص لم يُحسم.)
+- **الخطة (ج) إن لم يُعد File Search نص المقطع:** الطبقة المنتقاة (`data/curated`) + MiniSearch، مع تصريح علني بحدود التغطية في الواجهة وصفحة المنهجية وREADME.
+- **جارٍ الآن (بيانات فقط):** استخراج متن «المقاصد الحسنة» إلى `data/local/` المستثنى من Git (القرار 65).
 
-| # | التعارض | أين |
-|---|---|---|
-| P1 | **من يحدد تصنيف الحكم (`verdict`) وقت التشغيل؟** القرار 42: النموذج يختار المرشّح فقط والنص حرفي، لكن مدخلات الشاملة (غير المنتقاة) لا تحمل وسماً مثل weak/fabricated/no_basis. أيحدده الكود بقواعد لفظية على نص الإمام، أم النموذج، أم لا تصنيف والعرض بلفظ الإمام فقط؟ | القاعدتان 1 و21، الخطوة 5، `ClaimResult.verdict` |
-| P2 | **حدود المدخل:** اقتطاع «نص المدخل» يحتاج تقطيع الصفحة بأرقام الأحاديث، وبعض المداخل تمتد على صفحتين (مثل #660 بين 275 و276)، فكيف يتحقق شرط «substring من الصفحة»؟ وما الحد الأقصى لطول المعروض؟ | القاعدة 21 |
-| P3 | **File Search والفهرس النصي وسكربتات الفهرسة** (`build-index`، `upload-file-search`) لا تزال في §3 هنا وفي `CLAUDE.md` §4/§9/§9.1، بينما القرار 44: لا فهرسة محلية للكتب. هل يبقى MiniSearch على `data/curated` فقط؟ وهل يُلغى File Search؟ | PLAN §3، CLAUDE §4/§9 |
-| P4 | **المسار العام مقابل مسار الآلات:** الوثائق تعرّف `/api/verify` واحداً يحميه `VERIFY_API_TOKEN`، والقرار يتطلب مساراً عاماً بلا مفتاح للجنة. ما أسماء المسارين وهل يشتركان في المنسق نفسه؟ | CLAUDE §7، PLAN §6.7 |
-| P5 | **حالة مشتركة لتحديد المعدل والسقف اليومي:** على Vercel (serverless) الذاكرة غير مشتركة بين النسخ، بينما `CLAUDE.md` §9.1 يمنع الميزات الخاصة بمزود (KV) إلا خلف تجريد، وPLAN §6.7 يقول «في الذاكرة». | CLAUDE §9.1، PLAN §6.7 |
-| P6 | **الاستضافة:** PLAN (R8/O3) جعل الخادم الخاص افتراضياً والقرار 48 يختبر من Vercel؛ هل Vercel هو الهدف؟ وهل يستدعي `/api/health` Gemini عند كل تسخين (تكلفة)؟ | PLAN R8/O3، CLAUDE §9.1 |
-| P7 | **مصادقة الاتصال بخادم الشاملة:** إشعار الأداة يذكر أن الخادم `shamela` (من `.mcp.json`) يتطلب مصادقة؛ كيف يتصل الكود من Vercel بلا تدفق OAuth تفاعلي، وما حدود المعدل الرقمية المسموحة؟ | CLAUDE §5.1، PLAN R6 |
-| P8 | **ملف القرآن في Git:** `data/quran/quran-uthmani.txt` (نحو 1.3MB) نص كامل في المستودع، بينما فحص الاستلام الأخير يطلب «لا نصوص كتب كاملة»؛ الترخيص (CC-BY 3.0، نسخ حرفي) يسمح به. أيبقى؟ | CLAUDE §3 |
-| P9 | **«ألغِ خطة الـ20 صفحة»:** لا أثر لهذه الخطة في الملفات الحالية (قد تكون في نسخة سابقة لم تصلني)، فلم يُلغَ شيء. | — |
-| P10 | **حالات «التسرب» في eval:** لم تُضَف بعد؛ تحتاج أحاديث حكمها موثق في كتب خارج القائمة وغائبة عن كتب القائمة، ويلزم بحث موثق بالأدوات. | `eval/dataset.jsonl` |
-| P11 | **`search_completeness`** (`full`/`local_only`) في `ClaimResult` يكاد يتداخل مع `search_unavailable`؛ يُبقى أم يُحذف؟ | CLAUDE §5 |
+## 10. القرارات على التعارضات P1–P11 (3 أكتوبر 2026)
+كانت هنا معلّقة ثم حسمها صاحب المشروع؛ تفاصيلها في `docs/DECISIONS.md` (#54–#66) و`CLAUDE.md`.
+
+| # | القرار |
+|---|---|
+| P1 | الحكم الحي: النموذج يقترح جملة الحكم (substring حرفي) وتصنيفاً مرشحاً، والكود يتحقق بمعجم ثابت (موضوع/باطل→fabricated، لا أصل له→no_basis_per_scholar، ضعيف/منكر/لا يصح→weak). اتفاق⇒قبول، تعارض ألفاظ⇒disputed، لا لفظ⇒`scholar_text_only`. لا authentic آلياً. المنتقى يسبق الحي |
+| P2 | الشرط على نص المدخل الكامل من صفحات متتالية حتى رقم المدخل التالي (حد أقصى صفحتان)، والرابط لصفحة بداية الاقتباس |
+| P3 | MiniSearch على `data/curated` فقط؛ File Search خطة بديلة موسومة؛ لا سكربت يفهرس الكتب محلياً |
+| P4 | ثلاثة مسارات (`/api/verify` عام، `/api/telegram`، مسار آلي بـ VERIFY_API_TOKEN) تنادي `verifyMessage()` |
+| P5 | محدد معدل في الذاكرة (تقريبي لكل نسخة) خلف `RateLimitStore` + سقف Google/الرصيد؛ Upstash اختياري الاثنين |
+| P6 | Vercel هو الهدف والخادم الخاص بديل موثق؛ `/api/health` سطحي بلا Gemini و`?deep=1` للشاملة فقط؛ التسخين من مراقب خارجي لا Vercel Cron |
+| P7 | مفتوح حتى بوابة الأحد 9:15 (انظر §9)؛ وُثّق ما وُجد عن مصادقة الخادم |
+| P8 | ملف القرآن يبقى في Git |
+| P9 | لا إجراء |
+| P10 | حالات التسرب (خمس) مساء الاثنين |
+| P11 | حُذف `search_completeness`؛ يبقى `checked_sources` وأُضيف `failed_sources`؛ `not_found_in_sources` فقط إن كانت `failed_sources` فارغة وإلا `search_unavailable` |
