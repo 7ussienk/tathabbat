@@ -7,9 +7,9 @@ import { GeminiProvider } from "@/lib/llm/gemini";
 import { LLMError, type CallMeta, type LLMProvider, type LLMUsage } from "@/lib/llm/provider";
 import { logRequest } from "@/lib/log";
 import { VERSIONS } from "@/lib/versions";
-import { checkCurated, checkEntry, exactCollection, nearestEntry } from "@/lib/pipeline/ordered-check";
+import { checkCurated, checkEntry, exactCollection, fallbackNear, nearestEntry } from "@/lib/pipeline/ordered-check";
 import type { CollectionHit } from "@/lib/pipeline/judge";
-import { buildCollection, buildCurated, buildLive, buildWordingFromCurated, buildWordingFromEntry, mergeCollection, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
+import { buildCollection, buildCurated, buildLive, buildWordingFallback, buildWordingFromCurated, buildWordingFromEntry, mergeCollection, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
 import { composeReply, DISCLAIMER } from "@/lib/pipeline/compose-reply";
 import { extractClaims } from "@/lib/pipeline/extract-claims";
 import { judgeClaim } from "@/lib/pipeline/judge";
@@ -200,7 +200,11 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       return validateClaim(buildCollection(c, idx, { kind: "collection", hit, confidence: conf, usage: d.usage, meta: d.meta }, store), { store, retrievedIds });
     };
     let r: ClaimResult;
-    if (d.kind === "none") r = buildNotFound(c, idx, store, d.reason, d.confidence);
+    if (d.kind === "none") {
+      // لم يختر النموذج مرشحاً: قبل الامتناع يفحص الكود مداخل الصحيحين المسترجَعة بالتغطية الكثيفة (جزء من حديث أو تبديل كلمات) ويعرض لفظ المصدر بلا حكم (قرار 106)
+      const fb = d.reason === "no_candidates" ? [] : fallbackNear(c.claim_text, retrieved.candidates, store);
+      r = fb.length ? validateClaim(buildWordingFallback(c, idx, store, fb, d.reason.split(":")[0]), { store, retrievedIds: new Set([...retrievedIds, ...fb.map((h) => h.entry.id)]) }) : buildNotFound(c, idx, store, d.reason, d.confidence);
+    }
     else if (d.kind === "curated") {
       const o = checkCurated(c.claim_text, d.candidate.curated, store);
       if (o.kind === "exact") r = validateClaim(buildCurated(c, idx, d, store), { store, retrievedIds, curatedId: d.candidate.id });

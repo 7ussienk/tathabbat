@@ -241,7 +241,8 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
 
   it("فشل الحكم لأحد الادعاءات ⇒ partial مع بقية الادعاءات", async () => {
     let n = 0;
-    const r = await run("رسالة مركّبة", {
+    // ادعاءان حرفيان من الرسالة (حارس المستخرِج يرفض ادعاءً ليس مقطعاً منها) يفصل بينهما سطر جديد
+    const r = await run("هل يجوز لي كذا؟\nاطلبوا العلم ولو بالصين", {
       extract: extract({ claim_text: "هل يجوز لي كذا؟", claim_type: "fatwa_request" }, { claim_text: "اطلبوا العلم ولو بالصين" }),
       judge: () => {
         n++;

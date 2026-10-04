@@ -72,6 +72,12 @@ export function containsNormalized(haystack: string, needle: string): boolean {
  * النص المعاد من الأصل بحروفه (بتشكيله وعلاماته) لا من النموذج.
  */
 export function extractLiteral(original: string, needle: string): string | null {
+  const r = locateLiteral(original, needle);
+  return r ? original.slice(r.start, r.end) : null;
+}
+
+/** موضع المقطع الحرفي (فهرسا البداية والنهاية) في `original` المقابل لـ `needle` بعد التطبيع، أو null. */
+export function locateLiteral(original: string, needle: string): { start: number; end: number } | null {
   const n = normalizeArabic(needle);
   if (!n) return null;
   const { text, map } = normalizeWithMap(original);
@@ -82,7 +88,7 @@ export function extractLiteral(original: string, needle: string): string | null 
   // نهاية المقطع: آخر حرف مُطابِق وما يتبعه من تشكيل متصل به
   let end = lastIdx + 1;
   while (end < original.length && (DIACRITICS.test(original[end]) || HONORIFICS.test(original[end]))) end++;
-  return original.slice(start, end);
+  return { start, end };
 }
 
 /** إزالة سوابق شائعة لرفع الاسترجاع (ال، وال، بال، كال، فال، لل). تُطبَّق على الفهرس والاستعلام معاً. */

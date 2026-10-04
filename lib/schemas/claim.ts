@@ -61,6 +61,8 @@ export const ClaimResultSchema = z.object({
   failed_sources: z.array(z.string()).optional(),
   review_status: z.enum(["reviewed", "pending_review"]),
   downgrade_reason: z.string().optional(),
+  /** ملاحظة ثابتة مكتوبة في الكود (ليست مولَّدة) تُعرض مع الحكم، مثل تنبيه الادعاء الذي لم يُحدَّد حديثه (قرار 106) */
+  system_note: z.string().optional(),
   authentic_alternative: z.object({ text: z.string(), source_id: z.string(), location: z.string() }).optional(),
   generated_note: z.string().optional(), // «كيف فهمنا رسالتك»: موسوم مولَّداً (القاعدة 21)
   /** ألفاظ مطابَقة في معجم الأحكام أُضيفت بتعديل 4 أكتوبر وتنتظر مراجعة المرشد (needs_scholar_review) */
