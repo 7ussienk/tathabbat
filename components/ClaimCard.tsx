@@ -48,6 +48,8 @@ export function ClaimCard({ claim, sourceTitles }: { claim: ClaimResult; sourceT
         </div>
       )}
 
+      {c.verdict === "wording_differs" && c.system_note && <p className="rounded-xl border border-card bg-card/30 p-4 text-line">{c.system_note}</p>}
+
       {c.verdict === "wording_differs" && (
         <p className="rounded-xl border border-warn/40 bg-warn/10 p-4 text-warn">
           اللفظ الذي وصلك يختلف عمّا في المصدر. هذا لفظ المصدر نفسه، وقد يكون ما وصلك روايةً أخرى للحديث؛ لا نصف ما وصلك بالخطأ ولا بالكذب، لكننا لا نحكم عليه بلفظه هذا.

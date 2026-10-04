@@ -7,9 +7,9 @@ import { GeminiProvider } from "@/lib/llm/gemini";
 import { LLMError, type CallMeta, type LLMProvider, type LLMUsage } from "@/lib/llm/provider";
 import { logRequest } from "@/lib/log";
 import { VERSIONS } from "@/lib/versions";
-import { checkCurated, checkEntry, exactCollection, nearestEntry } from "@/lib/pipeline/ordered-check";
+import { checkCurated, checkEntry, exactCollection, fallbackNear, nearestEntry } from "@/lib/pipeline/ordered-check";
 import type { CollectionHit } from "@/lib/pipeline/judge";
-import { buildCollection, buildCurated, buildLive, buildWordingFromCurated, buildWordingFromEntry, mergeCollection, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
+import { buildCollection, buildCurated, buildLive, buildWordingFallback, buildWordingFromCurated, buildWordingFromEntry, mergeCollection, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
 import { composeReply, DISCLAIMER } from "@/lib/pipeline/compose-reply";
 import { extractClaims } from "@/lib/pipeline/extract-claims";
 import { judgeClaim } from "@/lib/pipeline/judge";
@@ -29,7 +29,7 @@ export type VerifyDeps = {
   useCurated?: boolean;
 };
 
-export const MAX_TEXT_CHARS = 4000;
+export const MAX_TEXT_CHARS = 3000;
 
 const ERRORS = {
   llm_unavailable: {
@@ -67,7 +67,8 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
   let usage = zeroUsage();
   /** أثر نداءات النموذج (الخطوة والنموذج والزمن والنتيجة): مصدر أي تأخر، تقني بلا نص */
   const trace: CallMeta[] = [];
-  const traceOut = () => trace.map((t) => ({ label: t.label, attempts: t.attempts.map((a) => ({ model: a.model, ms: a.ms, outcome: a.outcome })) }));
+  const traceOut = () => trace.map((t) => ({ label: t.label, attempts: t.attempts.map((a) => ({ model: a.model, ms: a.ms, outcome: a.outcome })), ...(t.note ? { note: t.note } : {}) }));
+  const servedModels = () => [...new Set(trace.flatMap((t) => t.attempts.filter((a) => a.outcome === "ok").map((a) => a.model)))].sort();
   const noteFailure = (label: string, e: unknown) => {
     const attempts = (e as LLMError).attempts;
     if (attempts?.length) trace.push({ label, attempts });
@@ -86,6 +87,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       timings_ms: timings,
       versions: { ...VERSIONS },
       llm_trace: traceOut(),
+      served_models: servedModels(),
       source_titles: Object.fromEntries(
         [...new Set(partial.claims.flatMap((c) => c.checked_sources ?? []))].flatMap((id) => (store?.sourceMeta[id] ? [[id, store.sourceMeta[id].title]] : [])),
       ),
@@ -108,6 +110,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       cost_estimate_usd: res.usage!.cost_usd,
       error_code: res.error?.code,
       llm_calls: res.llm_trace,
+      served_models: res.served_models,
     });
     return res;
   };
@@ -200,7 +203,11 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       return validateClaim(buildCollection(c, idx, { kind: "collection", hit, confidence: conf, usage: d.usage, meta: d.meta }, store), { store, retrievedIds });
     };
     let r: ClaimResult;
-    if (d.kind === "none") r = buildNotFound(c, idx, store, d.reason, d.confidence);
+    if (d.kind === "none") {
+      // لم يختر النموذج مرشحاً: قبل الامتناع يفحص الكود مداخل الصحيحين المسترجَعة بالتغطية الكثيفة (جزء من حديث أو تبديل كلمات) ويعرض لفظ المصدر بلا حكم (قرار 106)
+      const fb = d.reason === "no_candidates" ? [] : fallbackNear(c.claim_text, retrieved.candidates, store);
+      r = fb.length ? validateClaim(buildWordingFallback(c, idx, store, fb, d.reason.split(":")[0]), { store, retrievedIds: new Set([...retrievedIds, ...fb.map((h) => h.entry.id)]) }) : buildNotFound(c, idx, store, d.reason, d.confidence);
+    }
     else if (d.kind === "curated") {
       const o = checkCurated(c.claim_text, d.candidate.curated, store);
       if (o.kind === "exact") r = validateClaim(buildCurated(c, idx, d, store), { store, retrievedIds, curatedId: d.candidate.id });

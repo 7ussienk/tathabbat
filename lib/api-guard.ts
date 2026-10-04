@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { getConfig } from "@/lib/config";
 import { deepHealth, detailedHealth } from "@/lib/health";
+import { sharedCostMeter, sharedMachineMeter, type DailyCostMeter } from "@/lib/ratelimit/cost";
 import { sharedMemoryStore } from "@/lib/ratelimit/memory";
 import type { RateLimitStore } from "@/lib/ratelimit/store";
 import { MAX_TEXT_CHARS, verifyMessage } from "@/lib/verify-message";
@@ -35,19 +36,33 @@ function httpStatus(r: { status: string; error?: { code: string } }): number {
   return 200;
 }
 
-/** /api/verify العام: بلا مفتاح، محدَّد المعدل لكل IP + سقف يومي تقريبي لكل نسخة. */
-export async function handlePublicVerify(req: Request, store: RateLimitStore = sharedMemoryStore()): Promise<Response> {
-  const cfg = getConfig();
+export type GuardDeps = { verify?: typeof verifyMessage; meter?: DailyCostMeter; env?: NodeJS.ProcessEnv };
+
+const SEARCH_HINT = "حاول غداً، أو تحقق بنفسك عبر رابط البحث في الدرر السنية.";
+
+/**
+ * /api/verify العام: بلا مفتاح. الحمايات بالترتيب (رسائلها عربية بلا تفاصيل داخلية): مفتاح الإيقاف VERIFY_DISABLED ⟵ حد الدقيقة لكل IP ⟵ الحد
+ * اليومي لكل IP ⟵ السقف اليومي الإجمالي ⟵ سقف التكلفة اليومي التقديري. العدّادات في الذاكرة فهي **تقريبية لكل نسخة**؛ والضمان المشترك: سقف Google
+ * وقاعدة Vercel Firewall.
+ */
+export async function handlePublicVerify(req: Request, store: RateLimitStore = sharedMemoryStore(), deps: GuardDeps = {}): Promise<Response> {
+  const cfg = getConfig(deps.env);
+  if (cfg.VERIFY_DISABLED === "1") return err(503, "maintenance", "الأداة في صيانة مؤقتة.", "حاول بعد قليل، أو تحقق بنفسك عبر رابط البحث في الدرر السنية.");
   const ip = clientIp(req);
   if ((await store.hit(`ip:${ip}`, MINUTE)) > cfg.RATE_LIMIT_PER_MIN) {
     return err(429, "rate_limited", "أرسلت طلبات كثيرة خلال دقيقة.", "انتظر دقيقة ثم أعد المحاولة.");
   }
-  if ((await store.hit("daily", DAY)) > cfg.DAILY_CAP) {
-    return err(429, "daily_cap", "بلغت الأداة سقفها اليومي التقريبي للطلبات.", "حاول غداً، أو تحقق بنفسك عبر رابط البحث في الدرر السنية.");
+  if ((await store.hit(`ipday:${ip}`, DAY)) > cfg.IP_DAILY_CAP) {
+    return err(429, "ip_daily_cap", "بلغت الحد اليومي للطلبات من جهازك.", SEARCH_HINT);
+  }
+  const meter = deps.meter ?? sharedCostMeter();
+  if ((await store.hit("daily", DAY)) > cfg.DAILY_CAP || meter.total() >= cfg.COST_DAILY_CAP_USD) {
+    return err(429, "daily_cap", "بلغت الأداة سقفها اليومي التقريبي للطلبات.", SEARCH_HINT);
   }
   const t = await readText(req);
   if (t instanceof Response) return t;
-  const result = await verifyMessage({ type: "text", text: t.text }, { route: "/api/verify" });
+  const result = await (deps.verify ?? verifyMessage)({ type: "text", text: t.text }, { route: "/api/verify" });
+  meter.add(result.usage?.cost_usd ?? 0);
   return Response.json(result, { status: httpStatus(result) });
 }
 
@@ -63,12 +78,18 @@ function checkToken(req: Request): Response | null {
   return null;
 }
 
-export async function handleMachineVerify(req: Request): Promise<Response> {
+export async function handleMachineVerify(req: Request, deps: { verify?: typeof verifyMessage; meter?: DailyCostMeter; env?: NodeJS.ProcessEnv } = {}): Promise<Response> {
   const denied = checkToken(req);
   if (denied) return denied;
+  // مفتاح الإيقاف يشمل هذا المسار أيضاً (يوقف كل إنفاق)، ولهذا المسار سقف تكلفة يومي تقديري أعلى من العام
+  const cfg = getConfig(deps.env);
+  if (cfg.VERIFY_DISABLED === "1") return err(503, "maintenance", "الأداة في صيانة مؤقتة.", "حاول بعد قليل.");
+  const meter = deps.meter ?? sharedMachineMeter();
+  if (meter.total() >= cfg.MACHINE_COST_DAILY_CAP_USD) return err(429, "daily_cap", "بلغ المسار الآلي سقفه اليومي.", "حاول غداً.");
   const t = await readText(req);
   if (t instanceof Response) return t;
-  const result = await verifyMessage({ type: "text", text: t.text }, { route: "/api/machine/verify" });
+  const result = await (deps.verify ?? verifyMessage)({ type: "text", text: t.text }, { route: "/api/machine/verify" });
+  meter.add(result.usage?.cost_usd ?? 0);
   return Response.json(result, { status: httpStatus(result) });
 }
 

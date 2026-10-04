@@ -63,7 +63,54 @@ anchors.forEach((a, k) => {
     });
   control("exact", a.claim_text, "اللفظ كما في المنتقى");
   control("share", `${a.claim_text} انشرها تؤجر`, "اللفظ مع «انشرها تؤجر» في آخره");
+  // أجزاء قصيرة: أول ثلاث كلمات من المرساة (المتوقع wording_differs أو authentic ولا امتناع: الحديث موجود في الفهرس) — قرار 106
+  if (w.length >= 4) {
+    const frag = w.slice(0, 3).join(" ");
+    rows.push({
+      id: `F${a.id}-prefix3`,
+      category: "hadith_fragments",
+      input_type: "text",
+      critical: false,
+      synthetic: true,
+      reviewed: false,
+      anchor: a.id,
+      input: frag,
+      expected: [{ claim_hint: frag, accept: ["wording_differs", "authentic"], level: "A", curated_ref: a.id }],
+      note: `أول ثلاث كلمات من المرساة ${a.id}؛ الحديث في الفهرس فلا يجوز الامتناع`,
+    });
+  }
   void k;
 });
+// ادعاءات مضادة: كلمات شائعة بلا علاقة بأي حديث (عشرة مبعثرة وخمسة من الحياة اليومية)؛ المتوقع ألا يصدر wording_differs أبداً (قرار 106)
+const COUNTER = [
+  "من الله على ما في الذي لا",
+  "ما كان من الناس في يوم على الله",
+  "الذي لا يكون على من في الله ما",
+  "كل من في الناس لا على ما الله",
+  "يوم الناس الذي من كل ما على",
+  "على الله ما من كان الذي في لا",
+  "لا ما الذي كل يوم من على الله",
+  "ان الله من الناس في كل ما",
+  "قال من الناس ما في الله لا",
+  "ثم كل ما من الله الى الناس",
+  "ذهب الولد الى المدرسة في الصباح الباكر مع صديقه",
+  "سيارتي تحتاج الى تغيير الزيت قبل السفر الطويل",
+  "موعد الاجتماع غدا الساعة العاشرة في المكتب الرئيسي",
+  "اشتريت من السوق خبزا وحليبا وبعض الفاكهة الطازجة",
+  "تعطلت الطابعة في الطابق الثاني منذ صباح اليوم",
+];
+COUNTER.forEach((t, i) =>
+  rows.push({
+    id: `K${String(i + 1).padStart(3, "0")}-counter`,
+    category: "wording_counter",
+    input_type: "text",
+    critical: true,
+    synthetic: true,
+    reviewed: false,
+    input: t,
+    expected: [{ claim_hint: t, accept: ["not_found_in_sources", "not_a_religious_claim"], level: "A" }],
+    note: "ادعاء مضاد بلا علاقة بأي حديث؛ يُمنع wording_differs و authentic",
+  }),
+);
 writeFileSync("eval/wording_altered.jsonl", rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
-console.log(`${anchors.length} مرساة ⟵ ${rows.length} حالة (${rows.length - anchors.length * 2} معدَّلة + ${anchors.length * 2} ضابطة)`);
+console.log(`${anchors.length} مرساة ⟵ ${rows.length} حالة (${rows.length} إجمالاً: معدَّلة + ضابطة + أجزاء)`);

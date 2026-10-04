@@ -53,6 +53,7 @@ function claimBlock(c: ClaimResult, store: Store | null, compact: boolean): stri
         lines.push(`  لفظ الحديث في «${s.title}»${who ? ` (${who})` : ""}: «${q}» (${s.location})`);
         if (s.url) lines.push(`  ${s.url}`);
       }
+      if (c.system_note) lines.push(`  ${c.system_note}`);
       lines.push("  تنبيه: قد يكون هذا روايةً أخرى للحديث؛ لا نصف ما وصلك بالخطأ ولا بالكذب، لكننا لا نحكم عليه بلفظه هذا.");
       if (c.review_status === "pending_review") lines.push("  (بانتظار مراجعة شرعية)");
       break;

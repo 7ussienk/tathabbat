@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import { LLMError, type CallAttempt, type GenerateJsonRequest, type LLMProvider, type LLMResult, type LLMUsage } from "@/lib/llm/provider";
+import { LLMError, type CallAttempt, type CallMeta, type GenerateJsonRequest, type LLMProvider, type LLMResult, type LLMUsage } from "@/lib/llm/provider";
 
 export type GeminiOptions = {
   apiKey: string;
@@ -11,7 +11,23 @@ export type GeminiOptions = {
   firstTimeoutMs: number;
   /** مهلة المحاولة الاحتياطية */
   fallbackTimeoutMs: number;
+  /** ساعة قابلة للحقن للاختبار */
+  now?: () => number;
 };
+
+/** قاطع الدائرة: ثلاث مهلات متتالية للأساسي ⟵ 5 دقائق على الاحتياطي، ثم probe بطلب واحد */
+export const BREAKER_THRESHOLD = 3;
+export const BREAKER_OPEN_MS = 5 * 60_000;
+export type BreakerState = { timeouts: number; openUntil: number; probing: boolean };
+const gb = globalThis as unknown as { __tathabbatBreaker?: Record<string, BreakerState> };
+/** حالة القاطع للنموذج (مشتركة في العملية؛ تُصفَّر عند cold start) */
+export function breakerFor(model: string): BreakerState {
+  const all = (gb.__tathabbatBreaker ??= {});
+  return (all[model] ??= { timeouts: 0, openUntil: 0, probing: false });
+}
+export function resetBreakers(): void {
+  gb.__tathabbatBreaker = {};
+}
 
 type Raw = { output_text?: string; usage?: Record<string, number | undefined> };
 
@@ -29,7 +45,11 @@ export class GeminiProvider implements LLMProvider {
     this.ai = new GoogleGenAI({ apiKey: o.apiKey });
   }
 
-  private async once<T>(req: GenerateJsonRequest<T>, model: string, timeoutMs: number): Promise<{ data: T; usage: LLMUsage }> {
+  private now(): number {
+    return (this.o.now ?? Date.now)();
+  }
+
+  protected async once<T>(req: GenerateJsonRequest<T>, model: string, timeoutMs: number): Promise<{ data: T; usage: LLMUsage }> {
     const schema = z.toJSONSchema(req.schema) as Record<string, unknown>;
     delete schema.$schema;
     const r = (await withTimeout(
@@ -56,28 +76,73 @@ export class GeminiProvider implements LLMProvider {
     return { data, usage: { input_tokens: u.total_input_tokens ?? 0, output_tokens: (u.total_output_tokens ?? 0) + thought, thought_tokens: thought } };
   }
 
+  /**
+   * قاطع الدائرة (قرار 4 أكتوبر مساءً): إن انتهت مهلة النموذج الأساسي BREAKER_THRESHOLD مرات متتالية يُحوَّل الطلب مباشرة إلى الاحتياطي
+   * BREAKER_OPEN_MS (5 دقائق) فلا يضيع كل طلب ثماني ثوانٍ على نداء متعثّر ولا يُحاسَب نداء بلا فائدة؛ ثم يُجرَّب الأساسي بطلب واحد (probe):
+   * نجح ⟵ يُغلق القاطع، تعثّر ⟵ يُعاد فتحه 5 دقائق أخرى. الحالة مشتركة بين نسخ المزوّد داخل العملية (المنسّق ينشئ مزوّداً لكل طلب).
+   * يُسجَّل في meta.note: breaker_open | breaker_probe. لا نص رسالة.
+   */
   async generateJson<T>(req: GenerateJsonRequest<T>): Promise<LLMResult<T>> {
     const attempts: CallAttempt[] = [];
-    const plan = [{ model: this.o.model, timeout: this.o.firstTimeoutMs }];
-    if (this.o.fallbackModel && this.o.fallbackModel !== this.o.model) plan.push({ model: this.o.fallbackModel, timeout: this.o.fallbackTimeoutMs });
-    let last: unknown;
-    for (const step of plan) {
-      const t0 = Date.now();
-      try {
-        const res = await this.once(req, step.model, step.timeout);
-        attempts.push({ model: step.model, ms: Date.now() - t0, outcome: "ok" });
-        return { ...res, meta: { label: req.label, attempts } };
-      } catch (e) {
-        const kind = e instanceof LLMError ? e.kind : "unavailable";
-        const msg = String((e as Error)?.message ?? e);
-        attempts.push({ model: step.model, ms: Date.now() - t0, outcome: kind === "timeout" ? "timeout" : kind === "invalid_output" ? "invalid_output" : "error", detail: msg.slice(0, 100) });
-        last = e;
-        // أخطاء الطلب الدائمة (400/401/403/404) لا تُعاد على النموذج الاحتياطي لأنها لن تنجح معه عادةً
-        if (kind === "unavailable" && /\b(400|401|403)\b/.test(msg) && !/UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(msg)) break;
+    const primary = { model: this.o.model, timeout: this.o.firstTimeoutMs };
+    const fallback = this.o.fallbackModel && this.o.fallbackModel !== this.o.model ? { model: this.o.fallbackModel, timeout: this.o.fallbackTimeoutMs } : null;
+    const b = breakerFor(this.o.model);
+    const now = this.now();
+    let note: CallMeta["note"];
+    let probe = false;
+    let plan = fallback ? [primary, fallback] : [primary];
+    if (fallback && b.openUntil > 0) {
+      if (now < b.openUntil || b.probing) {
+        note = "breaker_open";
+        plan = [fallback, primary]; // الأساسي ملاذ أخير فقط إن فشل الاحتياطي
+      } else {
+        b.probing = true;
+        probe = true;
+        note = "breaker_probe";
       }
     }
+    const onPrimary = (outcome: CallAttempt["outcome"]) => {
+      if (outcome === "ok") {
+        b.timeouts = 0;
+        b.openUntil = 0;
+        b.probing = false;
+      } else if (outcome === "timeout") {
+        b.timeouts++;
+        if (probe || b.timeouts >= BREAKER_THRESHOLD) b.openUntil = this.now() + BREAKER_OPEN_MS;
+        b.probing = false;
+      } else if (probe) {
+        b.openUntil = this.now() + BREAKER_OPEN_MS;
+        b.probing = false;
+      }
+    };
+    let last: unknown;
+    try {
+      for (const step of plan) {
+        const t0 = Date.now();
+        const isPrimary = step.model === this.o.model;
+        // الأساسي ملاذاً أخيراً بعد فشل الاحتياطي في وضع القاطع المفتوح: لا يُحتسب إلا إن جُرِّب فعلاً
+        try {
+          const res = await this.once(req, step.model, step.timeout);
+          attempts.push({ model: step.model, ms: Date.now() - t0, outcome: "ok" });
+          if (isPrimary) onPrimary("ok");
+          return { ...res, meta: { label: req.label, attempts, note } };
+        } catch (e) {
+          const kind = e instanceof LLMError ? e.kind : "unavailable";
+          const msg = String((e as Error)?.message ?? e);
+          const outcome = kind === "timeout" ? "timeout" : kind === "invalid_output" ? "invalid_output" : "error";
+          // جسم الخطأ كاملاً (حتى 300 حرف) لا نص الرسالة: لتشخيص أخطاء مثل 400 العابرة
+          attempts.push({ model: step.model, ms: Date.now() - t0, outcome, detail: msg.slice(0, 300) });
+          if (isPrimary) onPrimary(outcome);
+          last = e;
+          // أخطاء الطلب الدائمة (400/401/403/404) لا تُعاد على النموذج الاحتياطي لأنها لن تنجح معه عادةً
+          if (kind === "unavailable" && /\b(400|401|403)\b/.test(msg) && !/UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(msg) && note !== "breaker_open") break;
+        }
+      }
+    } finally {
+      if (probe) b.probing = false;
+    }
     // سجل تقني بلا أي نص رسالة: وسم النداء والنماذج والأزمنة فقط (لفهم تعثّر الخدمة)
-    console.warn(JSON.stringify({ event: "llm_error", label: req.label, attempts }));
+    console.warn(JSON.stringify({ event: "llm_error", label: req.label, note, attempts }));
     const err = last instanceof LLMError ? last : new LLMError(`فشل Gemini (${req.label}): ${String((last as Error)?.message ?? last).slice(0, 200)}`, "unavailable");
     (err as LLMError & { attempts?: CallAttempt[] }).attempts = attempts;
     throw err;

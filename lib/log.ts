@@ -17,12 +17,14 @@ export type LogRecord = {
   cost_estimate_usd: number;
   error_code?: string;
   /** أثر نداءات النموذج: الخطوة والنموذج والزمن والنتيجة (تقني فقط) */
-  llm_calls?: { label: string; attempts: { model: string; ms: number; outcome: string }[] }[];
+  llm_calls?: { label: string; attempts: { model: string; ms: number; outcome: string }[]; note?: string }[];
+  /** النماذج التي خدمت الطلب فعلاً (تقني) */
+  served_models?: string[];
 };
 
 const ALLOWED: (keyof LogRecord)[] = [
   "ts", "request_id", "route", "input_type", "status", "duration_ms", "claims_count", "verdicts",
-  "downgrades", "tokens_in", "tokens_out", "cost_estimate_usd", "error_code", "llm_calls",
+  "downgrades", "tokens_in", "tokens_out", "cost_estimate_usd", "error_code", "llm_calls", "served_models",
 ];
 
 export function sanitize(rec: Record<string, unknown>): Partial<LogRecord> {

@@ -61,6 +61,8 @@ export const ClaimResultSchema = z.object({
   failed_sources: z.array(z.string()).optional(),
   review_status: z.enum(["reviewed", "pending_review"]),
   downgrade_reason: z.string().optional(),
+  /** ملاحظة ثابتة مكتوبة في الكود (ليست مولَّدة) تُعرض مع الحكم، مثل تنبيه الادعاء الذي لم يُحدَّد حديثه (قرار 106) */
+  system_note: z.string().optional(),
   authentic_alternative: z.object({ text: z.string(), source_id: z.string(), location: z.string() }).optional(),
   generated_note: z.string().optional(), // «كيف فهمنا رسالتك»: موسوم مولَّداً (القاعدة 21)
   /** ألفاظ مطابَقة في معجم الأحكام أُضيفت بتعديل 4 أكتوبر وتنتظر مراجعة المرشد (needs_scholar_review) */
@@ -90,9 +92,12 @@ export const VerifyResponseSchema = z.object({
       z.object({
         label: z.string(),
         attempts: z.array(z.object({ model: z.string(), ms: z.number(), outcome: z.enum(["ok", "timeout", "error", "invalid_output"]) })),
+        note: z.enum(["breaker_open", "breaker_probe"]).optional(),
       }),
     )
     .optional(),
+  /** النماذج التي خدمت فعلاً نداءات هذا الطلب (محاولات نجحت)، بلا نص رسالة: مثل ["gemini-3.7-flash"] */
+  served_models: z.array(z.string()).optional(),
   /** نسخة المعجم والبرومتات التي أنتجت هذا الرد (lib/versions.ts) */
   versions: z.object({ lexicon: z.string(), prompts: z.string(), scoring: z.string().optional() }).optional(),
 });

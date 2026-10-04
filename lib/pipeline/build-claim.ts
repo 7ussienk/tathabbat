@@ -289,6 +289,15 @@ export function buildWordingFromEntry(c: ExtractedClaim, idx: number, store: Sto
   return wording(c, idx, store, [entrySource(c, store, e, WORDING_NOTE)], confidence, reviewOf(store, e.source_id), `wording:${o.why}:lcs=${o.lcsCov.toFixed(2)}`);
 }
 
+/** ملاحظة ثابتة من الكود (ليست مولَّدة) حين تطابقت كلمات الادعاء مع مواضع دون أن يختار النموذج حديثاً بعينه. */
+export const FALLBACK_NOTE = "لم نستطع الجزم بأي حديث تقصد: كلمات رسالتك وردت متجاورة في المواضع المعروضة أدناه دون أن تطابق لفظها كاملاً. إن كنت تقصد حديثاً بعينه فالصق نصه كاملاً ليُقارَن لفظه بالمصدر.";
+
+export function buildWordingFallback(c: ExtractedClaim, idx: number, store: Store, hits: { entry: BookEntry; cov: number }[], reason: string): ClaimResult {
+  const sources = hits.map((h) => ({ ...entrySource(c, store, h.entry), attribution_note: "" }));
+  const r = wording(c, idx, store, sources, Math.round((0.5 + 0.2 * hits[0].cov) * 100) / 100, hits.some((h) => reviewOf(store, h.entry.source_id) === "pending_review") ? "pending_review" : "reviewed", `wording:fallback:${reason}:cov=${hits[0].cov.toFixed(2)}`);
+  return { ...r, system_note: FALLBACK_NOTE };
+}
+
 export function buildWordingFromCurated(c: ExtractedClaim, idx: number, store: Store, cur: CuratedEntry, confidence: number, o: Extract<OrderedResult, { kind: "near" }>): ClaimResult {
   const sources: SourceRef[] = cur.sources.map((s) => {
     const n = STORE_NUM.exec(s.location)?.[1];

@@ -1,3 +1,4 @@
+import { breakerFor } from "@/lib/llm/gemini";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { EXPECTED_ENTRIES } from "@/lib/retrieval/expected";
@@ -52,6 +53,11 @@ export async function detailedHealth(deep: boolean): Promise<Record<string, unkn
     config: { gemini_key: !!process.env.GEMINI_API_KEY, gemini_model: process.env.GEMINI_MODEL ?? null },
     fetch_report,
     index_report,
+    // قاطع الدائرة للنموذج الأساسي (حالة العملية الحالية فقط): مفتوح ⟵ الطلبات تذهب إلى الاحتياطي حتى openUntil
+    llm_breaker: (() => {
+      const b = breakerFor(process.env.GEMINI_MODEL ?? "gemini-3.8-flash");
+      return { open: b.openUntil > Date.now(), open_until: b.openUntil ? new Date(b.openUntil).toISOString() : null, consecutive_timeouts: b.timeouts };
+    })(),
   };
   if (deep) {
     const d = await deepHealth();

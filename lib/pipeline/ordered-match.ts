@@ -155,6 +155,40 @@ export function orderedMatch(claim: string, text: string, opts: { matnOnly?: boo
   return { kind: "far", lcsCov, runCov, bagCov };
 }
 
+/** أدنى تغطية كثيفة لاعتبار نافذة قريبة اللفظ حين لم يختر النموذج مرشحاً (fallback). تُحدَّد مسبقاً ولا تُضبط على نتائج التقييم. */
+export const NEAR_DENSE_MIN = 0.8;
+/** أدنى عدد كلمات للادعاء ليُجرى عليه فحص الـfallback (أقل منها عام جداً ويطابق كل شيء). */
+export const DENSE_MIN_WORDS = 3;
+
+export type DenseResult = { cov: number; hits: number; at: number };
+
+/**
+ * أعلى نسبة من كلمات الادعاء (بعد إزالة السوابق، بلا ترتيب) تقع داخل **نافذة متصلة** بطول n+2 كلمة من نص المدخل. تفرق بين تبديل/تقديم
+ * كلمات الحديث نفسه (كلماته متجاورة) وبين ادعاء كلماته الشائعة مبعثرة في نص طويل (لا مطابقة). للتصنيف القريب فقط، ولا تصلح للمطابقة التامة.
+ */
+export function denseCoverage(claim: string, text: string, opts: { matnOnly?: boolean } = {}): DenseResult {
+  const c = claimWords(claim).map(lightStem);
+  const parsed = parseWords(text);
+  const E = parsed.words.slice(opts.matnOnly ? parsed.matnFrom : 0).map((x) => lightStem(x.w));
+  const n = c.length;
+  if (n < DENSE_MIN_WORDS || E.length === 0) return { cov: 0, hits: 0, at: -1 };
+  const size = Math.min(E.length, n + 2);
+  const need = new Map<string, number>();
+  for (const w of c) need.set(w, (need.get(w) ?? 0) + 1);
+  let best = { hits: 0, at: 0 };
+  for (let s = 0; s + size <= E.length; s++) {
+    const pool = new Map(need);
+    let hits = 0;
+    for (let k = 0; k < size; k++) {
+      const left = pool.get(E[s + k]) ?? 0;
+      if (left > 0) { hits++; pool.set(E[s + k], left - 1); }
+    }
+    if (hits > best.hits) best = { hits, at: s };
+    if (hits === n) break;
+  }
+  return { cov: best.hits / n, hits: best.hits, at: best.at };
+}
+
 /** أفضل نتيجة بين عدة نصوص (صيغ منتقاة، ومدخل الكتاب، وأسماء الإحالة): exact يغلب near يغلب far. */
 export function bestOrdered(claim: string, texts: string[], opts: { matnOnly?: boolean } = {}): OrderedResult {
   let best: OrderedResult = { kind: "far", lcsCov: 0, runCov: 0 };

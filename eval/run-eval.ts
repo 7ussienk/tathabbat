@@ -12,7 +12,11 @@
  * يكتب التقرير إلى eval/report.md ونتائج الحالات الخام إلى eval/results/ (خارج Git).
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { BudgetExceededError, CachingProvider } from "../lib/llm/cache";
+import { GeminiProvider } from "../lib/llm/gemini";
+import { LLMError, type LLMProvider } from "../lib/llm/provider";
 import { containsNormalized } from "../lib/arabic/normalize";
 import { getConfig } from "../lib/config";
 import { lexicalOverlap } from "../lib/pipeline/retrieve";
@@ -40,6 +44,7 @@ const DATASET = opt("--file") ?? "eval/dataset.jsonl";
 const VALIDATION = opt("--validation");
 const OUT = opt("--out") ?? "eval/report.md";
 const LIMIT = Number(opt("--limit") ?? 10_000);
+const ONLY = opt("--only") ? new Set(opt("--only")!.split(",")) : null;
 
 const readJsonl = <T>(p: string): T[] => readFileSync(p, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as T);
 const dataset = readJsonl<Row>(DATASET).filter((r) => r.input_type === "text").slice(0, LIMIT);
@@ -57,7 +62,9 @@ function rowsFor(mode: Mode): Row[] {
       extra.push({ ...base, id: r.id, category: "leakage", critical: true, leakage: true, expected: base.expected.map((e) => ({ claim_hint: e.claim_hint, accept: ["not_found_in_sources"], level: e.level })) });
     } else extra.push({ ...r, category: "leakage", leakage: true });
   }
-  return [...dataset, ...extra, ...wording];
+  const all = [...dataset, ...extra, ...wording];
+  // تشغيل مستهدف (قاعدة الميزانية 3): --only critical,hadith_wording_altered,... (الكلمة critical تعني كل الحالات الحرجة)
+  return ONLY ? all.filter((r) => ONLY.has(r.category) || (ONLY.has("critical") && r.critical)) : all;
 }
 
 const store: Store = await getStore();
@@ -68,6 +75,11 @@ const hasIndexedSource = (ref?: string) => {
 };
 
 function match(e: Expected, claims: ClaimResult[]): ClaimResult | undefined {
+  // الحالات المضادة (قبول not_found_in_sources أو not_a_religious_claim): أيٌّ منهما مقبول، فلا يُفوَّت الأول بسبب الاستثناء أدناه. محصور بها لئلا تتساهل بقية الفئات.
+  if (e.accept.length > 1 && e.accept.every((a) => a === "not_found_in_sources" || a === "not_a_religious_claim")) {
+    const hit = claims.find((c) => e.accept.includes(c.verdict));
+    if (hit) return hit;
+  }
   if (e.accept.includes("refer_to_scholar")) return claims.find((c) => c.verdict === "refer_to_scholar");
   if (e.accept.includes("not_a_religious_claim")) return claims.find((c) => c.verdict === "not_a_religious_claim");
   return [...claims].sort((a, b) => lexicalOverlap(e.claim_hint, b.claim_text) - lexicalOverlap(e.claim_hint, a.claim_text))[0];
@@ -97,7 +109,7 @@ type Rec = {
   mode: Mode; run: number; id: string; category: string; critical: boolean; synthetic: boolean; leakage: boolean; known: boolean;
   accept: string[]; verdict: string; ok: boolean; abstain: boolean; outOfIndex: boolean; positive: boolean; sourced: boolean;
   badSources: number; downgraded: boolean; conf: number | null; ms: number; tokensIn: number; tokensOut: number; cost: number;
-  fallback: number; llmCalls: number; llmFailed: number; status: string;
+  fallback: number; llmCalls: number; llmFailed: number; status: string; served: string;
 };
 
 async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
@@ -111,11 +123,87 @@ const recs: Rec[] = [];
 const runStats: { mode: Mode; run: number; ms: number }[] = [];
 const cfg = getConfig();
 
+// ---------- قواعد الميزانية (CLAUDE.md §13) ----------
+// كاش لنداءات النموذج + حد EVAL_MAX_USD (الافتراضي 0.5$) + رفض إعادة تقييم commit وإعدادات سبق تقييمهما (إلا بـ --force)
+const MAX_USD = Number(process.env.EVAL_MAX_USD ?? 0.5);
+const gitOut = (a: string[]) => {
+  try {
+    return execFileSync("git", a, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  } catch {
+    return "";
+  }
+};
+const fileHash = (p: string) => (existsSync(p) ? createHash("sha256").update(readFileSync(p)).digest("hex") : "-");
+const fingerprint = createHash("sha256")
+  .update(
+    [
+      gitOut(["rev-parse", "HEAD"]),
+      gitOut(["diff", "HEAD"]),
+      gitOut(["ls-files", "--others", "--exclude-standard", "lib", "scripts", "eval", "data/curated"]),
+      LEXICON_VERSION,
+      PROMPT_VERSION,
+      SCORING_VERSION,
+      cfg.GEMINI_MODEL,
+      DATASET,
+      fileHash(DATASET),
+      fileHash("eval/leakage.jsonl"),
+      fileHash("eval/wording_altered.jsonl"),
+      MODES.join(","),
+      String(RUNS),
+      String(VALIDATION ?? ""),
+      String(opt("--only") ?? ""),
+    ].join("\u0000"),
+  )
+  .digest("hex")
+  .slice(0, 16);
+const REGISTRY = "eval/results/evaluated.json";
+mkdirSync("eval/results", { recursive: true });
+const registry: Record<string, { at: string; commit: string; usd: number }> = existsSync(REGISTRY) ? JSON.parse(readFileSync(REGISTRY, "utf8")) : {};
+// --replay: يعيد حساب التقرير من الكاش فقط بلا أي نداء (النداء غير المخزَّن ⟵ llm_unavailable)، فلا يخضع لرفض البصمة ولا يُسجَّل في COST_LOG
+const REPLAY = args.includes("--replay");
+if (!REPLAY && registry[fingerprint] && !args.includes("--force")) {
+  const p = registry[fingerprint];
+  console.error(`رُفض التشغيل: هذا الـcommit والإعدادات سبق تقييمهما (${p.at}، ${p.commit}، ${p.usd}$). لا إعادة إلا بطلب صريح: --force`);
+  process.exit(4);
+}
+let RUN_ID = "";
+const replayInner: LLMProvider = { generateJson: async () => { throw new LLMError("replay: لا نتيجة مخزَّنة لهذا النداء", "unavailable"); } };
+const cached = new CachingProvider(
+  REPLAY ? replayInner : new GeminiProvider({
+    apiKey: cfg.GEMINI_API_KEY!,
+    model: cfg.GEMINI_MODEL,
+    fallbackModel: cfg.GEMINI_FALLBACK_MODEL,
+    firstTimeoutMs: cfg.LLM_FIRST_TIMEOUT_MS,
+    fallbackTimeoutMs: cfg.LLM_FALLBACK_TIMEOUT_MS,
+  }),
+  {
+    dir: "eval/cache",
+    salt: [cfg.GEMINI_MODEL, cfg.GEMINI_FALLBACK_MODEL, PROMPT_VERSION, LEXICON_VERSION].join("|"),
+    maxUsd: MAX_USD,
+    priceInPerM: cfg.PRICE_IN_PER_M,
+    priceOutPerM: cfg.PRICE_OUT_PER_M,
+    getRun: () => RUN_ID,
+  },
+);
+/** يسجّل ما صُرف فعلاً في docs/COST_LOG.md (قاعدة الميزانية 1) */
+const logCost = (note: string) => {
+  if (REPLAY) return;
+  const when = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const commit = gitOut(["rev-parse", "--short", "HEAD"]).trim();
+  const row = `| ${when} UTC | npm run eval (${MODES.join("+")} x${RUNS}) | ${commit} / ${fingerprint} | ${cached.stats.spentUsd.toFixed(3)}$ | ${note}؛ كاش: ${cached.stats.hits} إصابة / ${cached.stats.misses} نداء فعلي |\n`;
+  try {
+    appendFileSync("docs/COST_LOG.md", row);
+  } catch {
+    /* السجل اختياري */
+  }
+};
+
 async function runMode(mode: Mode, run: number, rows: Row[]) {
+  RUN_ID = `${mode}:${run}`;
   const t0 = Date.now();
   const res = await pool(rows, CONC, async (r) => {
     const t = Date.now();
-    const out: VerifyResponse = await verifyMessage({ type: "text", text: r.input }, { route: `eval:${mode}:${run}`, useCurated: mode === "curated" });
+    const out: VerifyResponse = await verifyMessage({ type: "text", text: r.input }, { llm: cached, route: `eval:${mode}:${run}`, useCurated: mode === "curated" });
     return { r, out, wall: Date.now() - t };
   });
   for (const { r, out, wall } of res) {
@@ -135,6 +223,7 @@ async function runMode(mode: Mode, run: number, rows: Row[]) {
         ms: out.timings_ms.total ?? wall, tokensIn: out.usage?.input_tokens ?? 0, tokensOut: out.usage?.output_tokens ?? 0, cost: out.usage?.cost_usd ?? 0,
         fallback: trace.filter((t2) => t2.attempts.length > 1).length, llmCalls: trace.length, llmFailed: trace.filter((t2) => !t2.attempts.some((a) => a.outcome === "ok")).length,
         status: out.status,
+        served: (out.served_models ?? []).join("+") || "-",
       });
     }
   }
@@ -143,7 +232,21 @@ async function runMode(mode: Mode, run: number, rows: Row[]) {
 }
 
 console.log(`eval: ${RUNS} تشغيلات × ${MODES.join("+")}، توازٍ ${CONC}، نموذج ${cfg.GEMINI_MODEL} (احتياطي ${cfg.GEMINI_FALLBACK_MODEL})`);
-for (const mode of MODES) for (let run = 1; run <= RUNS; run++) await runMode(mode, run, rowsFor(mode));
+console.log(`ميزانية: EVAL_MAX_USD=${MAX_USD}$ | بصمة التشغيل ${fingerprint} | كاش: eval/cache`);
+try {
+  for (const mode of MODES) for (let run = 1; run <= RUNS; run++) await runMode(mode, run, rowsFor(mode));
+} catch (e) {
+  if (e instanceof BudgetExceededError) {
+    console.error(`\nأُوقف التشغيل: ${e.message}. ما أُنجز محفوظ في الكاش: أعد التشغيل بحد أعلى فيُكمل من حيث توقف بلا إعادة نداءات.`);
+    logCost("أُوقف بحد EVAL_MAX_USD");
+    process.exit(3);
+  }
+  throw e;
+}
+if (!REPLAY) registry[fingerprint] = { at: new Date().toISOString(), commit: gitOut(["rev-parse", "--short", "HEAD"]).trim(), usd: Math.round(cached.stats.spentUsd * 1000) / 1000 };
+if (!REPLAY) writeFileSync(REGISTRY, JSON.stringify(registry, null, 1));
+logCost("اكتمل");
+console.log(`\nالمصروف فعلاً: ${cached.stats.spentUsd.toFixed(3)}$ | كاش: ${cached.stats.hits} إصابة / ${cached.stats.misses} نداء فعلي`);
 
 // ---------- التقرير ----------
 const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(1)}%` : "—");
@@ -202,13 +305,20 @@ function section(mode: Mode) {
   const cost = rs.reduce((a, r) => a + r.cost, 0);
   L.push(`**الزمن للرسالة:** وسيط ${q(ms, 50)}ms | p95 ${q(ms, 95)}ms | أقصى ${Math.max(...ms)}ms (الهدف < 30000ms) | تشغيلات: ${runStats.filter((s) => s.mode === mode).map((s) => `${(s.ms / 1000).toFixed(0)}ث`).join(" / ")}`);
   L.push(`**نداءات النموذج:** ${rs.reduce((a, r) => a + r.llmCalls, 0)} | احتاجت الاحتياطي: ${rs.reduce((a, r) => a + r.fallback, 0)} | فشلت كلياً: ${rs.reduce((a, r) => a + r.llmFailed, 0)} | رسائل بحالة غير ok: ${rs.filter((r) => r.status !== "ok").length}`);
+  if (mode === MODES[MODES.length - 1]) L.push(`**المصروف فعلاً (بعد الكاش):** $${cached.stats.spentUsd.toFixed(3)} | إصابات الكاش ${cached.stats.hits}، نداءات فعلية ${cached.stats.misses} (الأرقام التالية تكلفة مكافئة بلا كاش)`);
   L.push(`**التكلفة:** $${cost.toFixed(3)} لـ${rs.length} ادعاءً في ${runs.length} تشغيلات (≈ $${(cost / (rs.length / runs.length) / runs.length).toFixed(4)} للادعاء)`, "");
+  // النموذج الذي خدم كل حالة (التشغيل الأول): "cache" = نتيجة مخزَّنة قديمة بلا نموذج مسجَّل، و"-" = لم يكتمل نداء
+  const servedBy = new Map<string, string[]>();
+  for (const r of rs.filter((x) => x.run === runs[0])) servedBy.set(r.served, [...(servedBy.get(r.served) ?? []), r.id]);
+  L.push("**النموذج الذي خدم كل حالة (التشغيل الأول):**");
+  for (const [k, ids] of [...servedBy].sort()) L.push(`- ${k}: ${ids.length} حالة — ${ids.join("، ")}`);
+  L.push("");
   const bad = [...byKey.values()].filter((v) => v.some((r) => !r.ok));
   if (bad.length) {
     L.push("### غير المصاب في تشغيل واحد على الأقل", "");
     for (const v of bad) {
       const r0 = v[0];
-      L.push(`- ${r0.id}${r0.critical ? "*" : ""} [${r0.category}] متوقع ${r0.accept.join("/")} ← ${v.map((r) => r.verdict + (r.abstain ? " (امتناع)" : r.outOfIndex ? " (كتاب غير مفهرس)" : "")).join(" ، ")}`);
+      L.push(`- ${r0.id}${r0.critical ? "*" : ""} [${r0.category}] متوقع ${r0.accept.join("/")} ← ${v.map((r) => r.verdict + (r.abstain ? " (امتناع)" : r.outOfIndex ? " (كتاب غير مفهرس)" : "")).join(" ، ")}  [خدمه: ${[...new Set(v.map((r) => r.served))].join(" ، ")}]`);
     }
     L.push("");
   }
@@ -226,10 +336,10 @@ if (VALIDATION) {
   else {
     const vr: Rec[] = [];
     for (let run = 1; run <= RUNS; run++) {
-      const res = await pool(vrows, CONC, async (r) => ({ r, out: await verifyMessage({ type: "text", text: r.input }, { route: "eval:validation", useCurated: false }) }));
+      const res = await pool(vrows, CONC, async (r) => ({ r, out: await verifyMessage({ type: "text", text: r.input }, { llm: cached, route: "eval:validation", useCurated: false }) }));
       for (const { r, out } of res) {
         const c = out.claims[0];
-        vr.push({ mode: "nocurated", run, id: r.id, category: r.category, critical: false, synthetic: false, leakage: false, known: false, accept: r.expected[0].accept, verdict: c?.verdict ?? "(none)", ok: !!c && r.expected[0].accept.includes(c.verdict), abstain: false, outOfIndex: false, positive: !!c && POSITIVE_VERDICTS.includes(c.verdict), sourced: !!c && c.sources.length > 0, badSources: c ? auditSources(c) : 0, downgraded: false, conf: c?.confidence ?? null, ms: out.timings_ms.total ?? 0, tokensIn: 0, tokensOut: 0, cost: out.usage?.cost_usd ?? 0, fallback: 0, llmCalls: 0, llmFailed: 0, status: out.status });
+        vr.push({ mode: "nocurated", run, id: r.id, category: r.category, critical: false, synthetic: false, leakage: false, known: false, accept: r.expected[0].accept, verdict: c?.verdict ?? "(none)", ok: !!c && r.expected[0].accept.includes(c.verdict), abstain: false, outOfIndex: false, positive: !!c && POSITIVE_VERDICTS.includes(c.verdict), sourced: !!c && c.sources.length > 0, badSources: c ? auditSources(c) : 0, downgraded: false, conf: c?.confidence ?? null, ms: out.timings_ms.total ?? 0, tokensIn: 0, tokensOut: 0, cost: out.usage?.cost_usd ?? 0, fallback: 0, llmCalls: 0, llmFailed: 0, status: out.status, served: "-" });
       }
     }
     const runs = [...new Set(vr.map((r) => r.run))];

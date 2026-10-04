@@ -16,7 +16,8 @@ export type GenerateJsonRequest<T> = {
 /** محاولة واحدة على نموذج: لمعرفة مصدر التأخر (النموذج والخطوة). تقنية فقط بلا نص. */
 export type CallAttempt = { model: string; ms: number; outcome: "ok" | "timeout" | "error" | "invalid_output"; detail?: string };
 
-export type CallMeta = { label: string; attempts: CallAttempt[] };
+/** note: حالة قاطع الدائرة لهذا النداء (breaker_open ⟵ حُوِّل للاحتياطي مباشرة، breaker_probe ⟵ تجربة الأساسي بعد الانقطاع) */
+export type CallMeta = { label: string; attempts: CallAttempt[]; note?: "breaker_open" | "breaker_probe" };
 
 export type LLMResult<T> = { data: T; usage: LLMUsage; meta?: CallMeta };
 
