@@ -7,6 +7,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadManifest, getBook } from "../lib/sources/manifest";
 import { chunkMaqasid, MAQASID_SOURCE_ID, type BookEntry, type BookFile } from "../lib/retrieval/chunk-maqasid";
+import { linkStubs } from "../lib/retrieval/stubs";
 import { bookDoc, buildIndex, curatedDoc } from "../lib/retrieval/text-index";
 import { CuratedEntrySchema, type CuratedEntry } from "../lib/schemas/curated";
 
@@ -29,7 +30,7 @@ export async function loadCurated(): Promise<CuratedEntry[]> {
 async function main() {
   const manifest = loadManifest();
   const entries: BookEntry[] = [];
-  const checked: { id: string; entries: number; truncated: number }[] = [];
+  const checked: { id: string; entries: number; truncated: number; stubs?: { stubs: number; linked: number; ambiguous: number; unresolved: number } }[] = [];
   for (const [id, chunk] of Object.entries(CHUNKERS)) {
     const b = getBook(manifest, id);
     const file = path.join(ROOT, "data", "local", `${b.turath_book_id}.v3.json`);
@@ -39,9 +40,11 @@ async function main() {
     } catch (e) {
       throw new Error(`تعذّر قراءة ${file}: شغّل scripts/fetch-books أولاً (${(e as Error).message})`);
     }
-    const es = chunk(book);
+    const chunked = chunk(book);
+    const linked = linkStubs(chunked); // ربط مداخل الإحالة بأهدافها (lib/retrieval/stubs.ts)
+    const es = linked.entries;
     entries.push(...es);
-    checked.push({ id, entries: es.length, truncated: es.filter((x) => x.truncated).length });
+    checked.push({ id, entries: es.length, truncated: es.filter((x) => x.truncated).length, stubs: linked.stats });
   }
   const curated = await loadCurated();
   const docs = [...entries.map(bookDoc), ...curated.map(curatedDoc)];
@@ -61,7 +64,10 @@ async function main() {
     JSON.stringify({ built_at: new Date().toISOString(), docs: docs.length, books: checked, curated: curated.length, index_bytes: json.length }, null, 2),
   );
   console.log(`build-index: ${docs.length} وثيقة (${entries.length} مدخل كتب + ${curated.length} curated)، الفهرس ${(json.length / 1024).toFixed(0)}KB`);
-  for (const c of checked) console.log(`  ✓ ${c.id}: ${c.entries} مدخلاً، مقطوع بحد الصفحات: ${c.truncated}`);
+  for (const c of checked) {
+    console.log(`  ✓ ${c.id}: ${c.entries} مدخلاً، مقطوع بحد الصفحات: ${c.truncated}`);
+    if (c.stubs) console.log(`    إحالات: ${c.stubs.stubs} (رُبط ${c.stubs.linked}، غامض ${c.stubs.ambiguous}، بلا هدف ${c.stubs.unresolved})`);
+  }
 }
 
 if (process.argv[1]?.endsWith("build-index.ts")) {

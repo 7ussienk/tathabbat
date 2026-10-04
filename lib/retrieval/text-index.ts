@@ -15,6 +15,7 @@ export type IndexDoc = {
   kind: IndexKind;
   source_id: string;
   head: string; // مطلع المدخل (لفظ الحديث غالباً) — يُرجَّح
+  alias: string; // صيغ مداخل الإحالة التي تشير إلى هذا المدخل (مُطبَّعة) — تُرجَّح كالمطلع
   text: string; // النص المُطبَّع الكامل
 };
 
@@ -26,23 +27,24 @@ export function headOf(rawText: string): string {
 }
 
 export function bookDoc(e: BookEntry): IndexDoc {
-  return { id: e.id, kind: "book", source_id: e.source_id, head: headOf(e.text), text: normalizeArabic(e.text) };
+  const alias = normalizeArabic((e.see_also ?? []).map((s) => s.alias).join(" "));
+  return { id: e.id, kind: "book", source_id: e.source_id, head: headOf(e.text), alias, text: normalizeArabic(e.text) };
 }
 
 export function curatedDoc(c: CuratedEntry): IndexDoc {
   const forms = [c.claim_text, ...(c.aliases ?? [])];
   const text = normalizeArabic(forms.join(" "));
-  return { id: `curated#${c.id}`, kind: "curated", source_id: "curated", head: normalizeArabic(c.claim_text), text };
+  return { id: `curated#${c.id}`, kind: "curated", source_id: "curated", head: normalizeArabic(c.claim_text), alias: "", text };
 }
 
 export const MINISEARCH_OPTIONS: Options<IndexDoc> = {
-  fields: ["head", "text"],
+  fields: ["head", "alias", "text"],
   storeFields: ["kind", "source_id"],
   // المدخلات مطبَّعة سلفاً؛ tokenize يطبّق إزالة السوابق (ال…) والكلمات الوظيفية على الفهرس والاستعلام
   tokenize: (s) => tokenize(s),
   processTerm: (t) => t,
   searchOptions: {
-    boost: { head: 3 },
+    boost: { head: 3, alias: 3 },
     combineWith: "OR",
     fuzzy: (term) => (term.length >= 6 ? 0.15 : false),
     prefix: false,

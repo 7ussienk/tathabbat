@@ -40,6 +40,8 @@ export class GeminiProvider implements LLMProvider {
         const msg = String((e as Error)?.message ?? e);
         const transient = isTimeout || /\b(429|500|502|503|504)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|fetch failed|ECONNRESET/i.test(msg);
         if (attempt >= 2 || !transient) {
+          // سجل تقني بلا أي نص رسالة: وسم النداء ونوع الخطأ فقط (لفهم تعثّر الخدمة)
+          console.warn(JSON.stringify({ event: "llm_error", label: req.label, timeout: isTimeout, attempt, msg: msg.slice(0, 120) }));
           if (isTimeout) throw e;
           throw new LLMError(`فشل Gemini (${req.label}): ${msg.slice(0, 200)}`, "unavailable");
         }

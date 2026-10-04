@@ -1,4 +1,6 @@
 import { extractLiteral } from "@/lib/arabic/normalize";
+import { containmentOverlap } from "@/lib/pipeline/retrieve";
+import { headOf } from "@/lib/retrieval/text-index";
 import { decideVerdict, type LexClass } from "@/lib/pipeline/verdict-lexicon";
 import type { JudgeDecision } from "@/lib/pipeline/judge";
 import { QURAN_SOURCE_ID, skeletonWords, type QuranMatch } from "@/lib/quran/quran";
@@ -152,15 +154,24 @@ export function buildLive(c: ExtractedClaim, idx: number, d: Extract<JudgeDecisi
   if (d.sentence && !literal) return buildNotFound(c, idx, store, "quote_not_substring", d.confidence * 0.5);
   const meta = store.sourceMeta[e.source_id];
   let verdict: Verdict = "scholar_text_only";
+  let reviewTerms: string[] = [];
   if (literal && c.content_level !== "B") {
-    verdict = decideVerdict(literal, d.proposed as LexClass | "none").verdict;
+    const lex = decideVerdict(literal, d.proposed as LexClass | "none");
+    verdict = lex.verdict;
+    reviewTerms = lex.needs_scholar_review;
   }
+  // مدخل بلغته إحالة: اللفظ المسؤول عنه ورد في مدخل إحالة، والحكم في الهدف. نذكر المدخلين، والاقتباس من الهدف.
+  const viaStub = (e.see_also ?? [])
+    .map((s) => ({ s, o: containmentOverlap(c.claim_text, headOf(s.alias)) }))
+    .filter((x) => x.o > containmentOverlap(c.claim_text, headOf(e.text)))
+    .sort((a, b) => b.o - a.o)[0]?.s;
   const src: SourceRef = {
     source_id: e.source_id,
     title: meta?.title ?? e.source_id,
     location: e.location,
     quoted_text: excerpt(e.text, literal),
     grading_quote: literal ?? undefined,
+    attribution_note: viaStub ? `ورد لفظ الادعاء في مدخل إحالة (رقم ${viaStub.number}): «${viaStub.text}»، والحكم في المدخل رقم ${e.number} المنقول أعلاه.` : undefined,
     url: turathUrl(store, e),
   };
   return {
@@ -171,5 +182,6 @@ export function buildLive(c: ExtractedClaim, idx: number, d: Extract<JudgeDecisi
     checked_sources: checkedSources(store),
     failed_sources: [],
     review_status: meta?.reviewed ? "reviewed" : "pending_review",
+    lexicon_review_terms: reviewTerms.length ? reviewTerms : undefined,
   };
 }

@@ -58,6 +58,8 @@ export const ClaimResultSchema = z.object({
   downgrade_reason: z.string().optional(),
   authentic_alternative: z.object({ text: z.string(), source_id: z.string(), location: z.string() }).optional(),
   generated_note: z.string().optional(), // «كيف فهمنا رسالتك»: موسوم مولَّداً (القاعدة 21)
+  /** ألفاظ مطابَقة في معجم الأحكام أُضيفت بتعديل 4 أكتوبر وتنتظر مراجعة المرشد (needs_scholar_review) */
+  lexicon_review_terms: z.array(z.string()).optional(),
   verify_link: z.string(),
 });
 export type ClaimResult = z.infer<typeof ClaimResultSchema>;
@@ -75,5 +77,7 @@ export const VerifyResponseSchema = z.object({
   timings_ms: z.record(z.string(), z.number()),
   /** استهلاك التوكنز وتكلفة الرسالة (تقني؛ القاعدة 26) */
   usage: z.object({ input_tokens: z.number(), output_tokens: z.number(), cost_usd: z.number() }).optional(),
+  /** نسخة المعجم والبرومتات التي أنتجت هذا الرد (lib/versions.ts) */
+  versions: z.object({ lexicon: z.string(), prompts: z.string() }).optional(),
 });
 export type VerifyResponse = z.infer<typeof VerifyResponseSchema>;

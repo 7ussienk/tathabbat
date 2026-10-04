@@ -39,9 +39,11 @@ export function retrieve(store: Store, claimText: string, k = TOP_K, opts: { cur
     if (h.kind === "curated") {
       const c = store.curated.get(h.id.replace(/^curated#/, ""));
       if (c) out.push({ id: h.id, kind: "curated", score: h.score, curated: c });
-    } else if (!covered.has(h.id)) {
-      const e = store.entries.get(h.id);
-      if (e) out.push({ id: h.id, kind: "book", score: h.score, entry: e });
+    } else {
+      let e = store.entries.get(h.id);
+      // مدخل الإحالة لا يحمل حكماً: يُستبدل بهدفه (الذي فيه الحكم)، ويُدمج إن كان الهدف حاضراً
+      if (e?.ref_to) e = store.entries.get(`${e.source_id}#${e.ref_to}`) ?? e;
+      if (e && !covered.has(e.id) && !out.some((x) => x.id === e!.id)) out.push({ id: e.id, kind: "book", score: h.score, entry: e });
     }
     if (out.length >= k) break;
   }
@@ -80,5 +82,6 @@ export function overlapsFor(claim: string, cand: Candidate): { head: number; tex
     const best = Math.max(...forms.map((f) => containmentOverlap(claim, f)));
     return { head: best, text: best };
   }
-  return { head: containmentOverlap(claim, headOf(cand.entry.text)), text: lexicalOverlap(claim, cand.entry.text) };
+  const aliases = (cand.entry.see_also ?? []).map((s) => containmentOverlap(claim, headOf(s.alias)));
+  return { head: Math.max(containmentOverlap(claim, headOf(cand.entry.text)), ...aliases), text: lexicalOverlap(claim, cand.entry.text) };
 }

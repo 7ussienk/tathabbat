@@ -6,6 +6,7 @@ import { getConfig, type Config } from "@/lib/config";
 import { GeminiProvider } from "@/lib/llm/gemini";
 import { LLMError, type LLMProvider, type LLMUsage } from "@/lib/llm/provider";
 import { logRequest } from "@/lib/log";
+import { VERSIONS } from "@/lib/versions";
 import { buildCurated, buildLive, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
 import { composeReply, DISCLAIMER } from "@/lib/pipeline/compose-reply";
 import { extractClaims } from "@/lib/pipeline/extract-claims";
@@ -74,6 +75,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       input_type: "text",
       disclaimer: DISCLAIMER,
       timings_ms: timings,
+      versions: { ...VERSIONS },
       usage: { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, cost_usd: Math.round(cost * 1e6) / 1e6 },
       ...composed,
       ...partial,

@@ -92,13 +92,19 @@ function targets(ref?: string): string[] {
     .map((n) => `maqasid-sakhawi#${n}`);
 }
 
+/** هل لمدخل المنتقى مصدر في كتاب مفهرس فعلاً (حتى لو بلا رقم مدخل)؟ يحدد «الممكن على الكتب المفهرسة». */
+function hasIndexedSource(ref?: string): boolean {
+  const c = ref ? store.curated.get(ref) : undefined;
+  return !!c && c.sources.some((s) => store.indexedSources.includes(s.source_id));
+}
+
 const t0 = Date.now();
 const results = await pool(rows, conc, async (r) => ({ r, ...(await call(r.input)) }));
 
 type Cat = { hit: number; total: number; abstain: number };
 const byCat = new Map<string, Cat>();
 let pass = 0, total = 0, abstain = 0, critFail = 0, tokensIn = 0, tokensOut = 0, cost = 0;
-let reachable = 0, reachableHit = 0, retrievalMiss = 0, judgeMiss = 0, wrongVerdict = 0, unindexed = 0;
+let reachable = 0, reachableHit = 0, retrievalMiss = 0, judgeMiss = 0, wrongVerdict = 0, unindexed = 0, unindexedHit = 0;
 const walls: number[] = [];
 const server: number[] = [];
 const lines: string[] = [];
@@ -126,8 +132,12 @@ for (const { r, res, wall } of results) {
     if (isRetrievalCase && tg.length) {
       reachable++;
       if (ok) reachableHit++;
-    } else if (isRetrievalCase && !tg.length) {
-      unindexed++; // الكتاب المصدر غير مفهرس (الصحيحان، لسان الميزان…): لا يبلغها إلا المنتقى
+    }
+    // المقام الثاني: نستبعد الادعاء المعروف الذي لا مصدر له في أي كتاب مفهرس (الصحيحان، لسان الميزان…)؛ لا يبلغه إلا المنتقى
+    const outOfIndex = isRetrievalCase && !hasIndexedSource(e.curated_ref);
+    if (outOfIndex) {
+      unindexed++;
+      if (ok) unindexedHit++;
     }
     let why = "";
     if (!ok && isRetrievalCase && tg.length) {
@@ -150,8 +160,12 @@ for (const { r, res, wall } of results) {
 const pctl = (xs: number[], p: number) => [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor((p / 100) * xs.length))] ?? 0;
 if (verbose) console.log(lines.join("\n"));
 console.log(`\nالوضع: ${remote ? `remote ${remote}` : "محلي"} | ${noCurated ? "بدون curated" : "مع curated"} | ${rows.length} رسالة`);
-console.log(`النتيجة: ${pass}/${total} إصابة (${((pass / total) * 100).toFixed(1)}%) | امتناع على معروف: ${abstain} | إخفاقات حرجة: ${critFail}`);
-console.log(`حالات استرجاعية بكتاب مفهرس (المقاصد): ${reachableHit}/${reachable} | حالات كتابها غير مفهرس: ${unindexed}`);
+console.log(`(1) كل الحالات:                 ${pass}/${total} إصابة (${((pass / total) * 100).toFixed(1)}%) | امتناع على معروف: ${abstain} | إخفاقات حرجة: ${critFail}`);
+const feasTotal = total - unindexed;
+const feasHit = pass - unindexedHit;
+console.log(`(2) الممكنة على الكتب المفهرسة: ${feasHit}/${feasTotal} إصابة (${((feasHit / feasTotal) * 100).toFixed(1)}%)`);
+console.log(`    المقام (2) = كل الادعاءات المتوقعة (${total}) ناقص ${unindexed} ادعاءً معروفاً (له curated_ref) ليس له مصدر في أي كتاب مفهرس فعلاً (الكتب المفهرسة الآن: ${store.indexedSources.join("، ")}). لا يُعرض (2) وحده.`);
+console.log(`حالات استرجاعية بكتاب مفهرس: ${reachableHit}/${reachable} (بعدد مدخل معروف)`);
 console.log(`مواضع الفشل (بين الحالات الاسترجاعية غير المصابة): فشل استرجاع=${retrievalMiss} | المدخل ضمن أفضل 10 لكن امتناع=${judgeMiss} | حكم مخالف=${wrongVerdict}`);
 console.log("حسب الفئة (إصابة/كلي، امتناع):");
 for (const [k, v] of byCat) console.log(`  ${k}: ${v.hit}/${v.total}${v.abstain ? `، امتناع ${v.abstain}` : ""}`);

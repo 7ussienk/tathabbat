@@ -23,6 +23,10 @@ export type BookEntry = {
   page_id_start: number; // معرّف صفحة البداية في تراث/الشاملة (فهرس الصفحة في الملف + 1)
   text: string; // نص المدخل حرفياً من المتن (بلا الحواشي وعلامات الحواشي)، يبدأ بـ «حديث:»
   truncated: boolean; // قُطع عند حد الصفحات الأربع قبل بلوغ المدخل التالي
+  /** مدخل إحالة («…، في: X»): رقم المدخل الهدف الذي فيه الحكم (يُملأ وقت البناء: lib/retrieval/stubs.ts) */
+  ref_to?: number;
+  /** على الهدف: مداخل الإحالة التي تشير إليه (نصها حرفي من الكتاب) */
+  see_also?: { number: number; text: string; alias: string }[];
 };
 
 export const MAQASID_SOURCE_ID = "maqasid-sakhawi";
