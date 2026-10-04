@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { getConfig } from "@/lib/config";
 import { deepHealth, detailedHealth } from "@/lib/health";
-import { sharedCostMeter, type DailyCostMeter } from "@/lib/ratelimit/cost";
+import { sharedCostMeter, sharedMachineMeter, type DailyCostMeter } from "@/lib/ratelimit/cost";
 import { sharedMemoryStore } from "@/lib/ratelimit/memory";
 import type { RateLimitStore } from "@/lib/ratelimit/store";
 import { MAX_TEXT_CHARS, verifyMessage } from "@/lib/verify-message";
@@ -78,12 +78,18 @@ function checkToken(req: Request): Response | null {
   return null;
 }
 
-export async function handleMachineVerify(req: Request): Promise<Response> {
+export async function handleMachineVerify(req: Request, deps: { verify?: typeof verifyMessage; meter?: DailyCostMeter; env?: NodeJS.ProcessEnv } = {}): Promise<Response> {
   const denied = checkToken(req);
   if (denied) return denied;
+  // مفتاح الإيقاف يشمل هذا المسار أيضاً (يوقف كل إنفاق)، ولهذا المسار سقف تكلفة يومي تقديري أعلى من العام
+  const cfg = getConfig(deps.env);
+  if (cfg.VERIFY_DISABLED === "1") return err(503, "maintenance", "الأداة في صيانة مؤقتة.", "حاول بعد قليل.");
+  const meter = deps.meter ?? sharedMachineMeter();
+  if (meter.total() >= cfg.MACHINE_COST_DAILY_CAP_USD) return err(429, "daily_cap", "بلغ المسار الآلي سقفه اليومي.", "حاول غداً.");
   const t = await readText(req);
   if (t instanceof Response) return t;
-  const result = await verifyMessage({ type: "text", text: t.text }, { route: "/api/machine/verify" });
+  const result = await (deps.verify ?? verifyMessage)({ type: "text", text: t.text }, { route: "/api/machine/verify" });
+  meter.add(result.usage?.cost_usd ?? 0);
   return Response.json(result, { status: httpStatus(result) });
 }
 

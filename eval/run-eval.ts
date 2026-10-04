@@ -109,7 +109,7 @@ type Rec = {
   mode: Mode; run: number; id: string; category: string; critical: boolean; synthetic: boolean; leakage: boolean; known: boolean;
   accept: string[]; verdict: string; ok: boolean; abstain: boolean; outOfIndex: boolean; positive: boolean; sourced: boolean;
   badSources: number; downgraded: boolean; conf: number | null; ms: number; tokensIn: number; tokensOut: number; cost: number;
-  fallback: number; llmCalls: number; llmFailed: number; status: string;
+  fallback: number; llmCalls: number; llmFailed: number; status: string; served: string;
 };
 
 async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
@@ -223,6 +223,7 @@ async function runMode(mode: Mode, run: number, rows: Row[]) {
         ms: out.timings_ms.total ?? wall, tokensIn: out.usage?.input_tokens ?? 0, tokensOut: out.usage?.output_tokens ?? 0, cost: out.usage?.cost_usd ?? 0,
         fallback: trace.filter((t2) => t2.attempts.length > 1).length, llmCalls: trace.length, llmFailed: trace.filter((t2) => !t2.attempts.some((a) => a.outcome === "ok")).length,
         status: out.status,
+        served: (out.served_models ?? []).join("+") || "-",
       });
     }
   }
@@ -306,12 +307,18 @@ function section(mode: Mode) {
   L.push(`**نداءات النموذج:** ${rs.reduce((a, r) => a + r.llmCalls, 0)} | احتاجت الاحتياطي: ${rs.reduce((a, r) => a + r.fallback, 0)} | فشلت كلياً: ${rs.reduce((a, r) => a + r.llmFailed, 0)} | رسائل بحالة غير ok: ${rs.filter((r) => r.status !== "ok").length}`);
   if (mode === MODES[MODES.length - 1]) L.push(`**المصروف فعلاً (بعد الكاش):** $${cached.stats.spentUsd.toFixed(3)} | إصابات الكاش ${cached.stats.hits}، نداءات فعلية ${cached.stats.misses} (الأرقام التالية تكلفة مكافئة بلا كاش)`);
   L.push(`**التكلفة:** $${cost.toFixed(3)} لـ${rs.length} ادعاءً في ${runs.length} تشغيلات (≈ $${(cost / (rs.length / runs.length) / runs.length).toFixed(4)} للادعاء)`, "");
+  // النموذج الذي خدم كل حالة (التشغيل الأول): "cache" = نتيجة مخزَّنة قديمة بلا نموذج مسجَّل، و"-" = لم يكتمل نداء
+  const servedBy = new Map<string, string[]>();
+  for (const r of rs.filter((x) => x.run === runs[0])) servedBy.set(r.served, [...(servedBy.get(r.served) ?? []), r.id]);
+  L.push("**النموذج الذي خدم كل حالة (التشغيل الأول):**");
+  for (const [k, ids] of [...servedBy].sort()) L.push(`- ${k}: ${ids.length} حالة — ${ids.join("، ")}`);
+  L.push("");
   const bad = [...byKey.values()].filter((v) => v.some((r) => !r.ok));
   if (bad.length) {
     L.push("### غير المصاب في تشغيل واحد على الأقل", "");
     for (const v of bad) {
       const r0 = v[0];
-      L.push(`- ${r0.id}${r0.critical ? "*" : ""} [${r0.category}] متوقع ${r0.accept.join("/")} ← ${v.map((r) => r.verdict + (r.abstain ? " (امتناع)" : r.outOfIndex ? " (كتاب غير مفهرس)" : "")).join(" ، ")}`);
+      L.push(`- ${r0.id}${r0.critical ? "*" : ""} [${r0.category}] متوقع ${r0.accept.join("/")} ← ${v.map((r) => r.verdict + (r.abstain ? " (امتناع)" : r.outOfIndex ? " (كتاب غير مفهرس)" : "")).join(" ، ")}  [خدمه: ${[...new Set(v.map((r) => r.served))].join(" ، ")}]`);
     }
     L.push("");
   }
@@ -332,7 +339,7 @@ if (VALIDATION) {
       const res = await pool(vrows, CONC, async (r) => ({ r, out: await verifyMessage({ type: "text", text: r.input }, { llm: cached, route: "eval:validation", useCurated: false }) }));
       for (const { r, out } of res) {
         const c = out.claims[0];
-        vr.push({ mode: "nocurated", run, id: r.id, category: r.category, critical: false, synthetic: false, leakage: false, known: false, accept: r.expected[0].accept, verdict: c?.verdict ?? "(none)", ok: !!c && r.expected[0].accept.includes(c.verdict), abstain: false, outOfIndex: false, positive: !!c && POSITIVE_VERDICTS.includes(c.verdict), sourced: !!c && c.sources.length > 0, badSources: c ? auditSources(c) : 0, downgraded: false, conf: c?.confidence ?? null, ms: out.timings_ms.total ?? 0, tokensIn: 0, tokensOut: 0, cost: out.usage?.cost_usd ?? 0, fallback: 0, llmCalls: 0, llmFailed: 0, status: out.status });
+        vr.push({ mode: "nocurated", run, id: r.id, category: r.category, critical: false, synthetic: false, leakage: false, known: false, accept: r.expected[0].accept, verdict: c?.verdict ?? "(none)", ok: !!c && r.expected[0].accept.includes(c.verdict), abstain: false, outOfIndex: false, positive: !!c && POSITIVE_VERDICTS.includes(c.verdict), sourced: !!c && c.sources.length > 0, badSources: c ? auditSources(c) : 0, downgraded: false, conf: c?.confidence ?? null, ms: out.timings_ms.total ?? 0, tokensIn: 0, tokensOut: 0, cost: out.usage?.cost_usd ?? 0, fallback: 0, llmCalls: 0, llmFailed: 0, status: out.status, served: "-" });
       }
     }
     const runs = [...new Set(vr.map((r) => r.run))];

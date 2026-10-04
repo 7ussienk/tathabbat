@@ -8,7 +8,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { GenerateJsonRequest, LLMProvider, LLMResult, LLMUsage } from "@/lib/llm/provider";
+import type { CallMeta, GenerateJsonRequest, LLMProvider, LLMResult, LLMUsage } from "@/lib/llm/provider";
 
 export class BudgetExceededError extends Error {
   constructor(readonly spentUsd: number, readonly maxUsd: number) {
@@ -27,7 +27,7 @@ export type CacheOptions = {
   getRun: () => string;
 };
 
-type Entry = { data: unknown; usage: LLMUsage };
+type Entry = { data: unknown; usage: LLMUsage; meta?: CallMeta };
 
 export class CachingProvider implements LLMProvider {
   stats = { hits: 0, misses: 0, spentUsd: 0 };
@@ -46,13 +46,14 @@ export class CachingProvider implements LLMProvider {
     if (existsSync(file)) {
       const e = JSON.parse(readFileSync(file, "utf8")) as Entry;
       this.stats.hits++;
-      return { data: req.schema.parse(e.data), usage: e.usage, meta: { label: req.label, attempts: [{ model: "cache", ms: 0, outcome: "ok" }] } };
+      // meta المخزَّنة تحفظ النموذج الذي خدم النداء فعلاً (للتقرير)؛ والمدخلات القديمة بلا meta تُعلَّم "cache"
+      return { data: req.schema.parse(e.data), usage: e.usage, meta: e.meta ?? { label: req.label, attempts: [{ model: "cache", ms: 0, outcome: "ok" }] } };
     }
     if (this.stats.spentUsd >= this.o.maxUsd) throw new BudgetExceededError(this.stats.spentUsd, this.o.maxUsd);
     const r = await this.inner.generateJson(req);
     this.stats.misses++;
     this.stats.spentUsd += (r.usage.input_tokens * this.o.priceInPerM + r.usage.output_tokens * this.o.priceOutPerM) / 1e6;
-    writeFileSync(file, JSON.stringify({ data: r.data, usage: r.usage } satisfies Entry));
+    writeFileSync(file, JSON.stringify({ data: r.data, usage: r.usage, meta: r.meta } satisfies Entry));
     return r;
   }
 }

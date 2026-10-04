@@ -15,6 +15,8 @@ const EnvSchema = z.object({
   // حد يومي لكل IP، وسقف تكلفة يومي تقديري بالدولار (يُجمع من usage.cost_usd)
   IP_DAILY_CAP: num(60),
   COST_DAILY_CAP_USD: num(1.5),
+  // سقف تكلفة يومي تقديري للمسار الآلي بالتوكن (أعلى من العام)
+  MACHINE_COST_DAILY_CAP_USD: num(3),
   // مفتاح إيقاف: VERIFY_DISABLED=1 ⟵ المسار العام يعيد رسالة صيانة بلا أي نداء نموذج (يحتاج Redeploy)
   VERIFY_DISABLED: z.string().optional(),
   // مهلة كلية للمعالجة قبل إعادة نتيجة جزئية (R3: 25 ثانية)

@@ -27,5 +27,7 @@ export class DailyCostMeter {
   }
 }
 
-const g = globalThis as unknown as { __tathabbatCost?: DailyCostMeter };
+const g = globalThis as unknown as { __tathabbatCost?: DailyCostMeter; __tathabbatMachineCost?: DailyCostMeter };
 export const sharedCostMeter = (): DailyCostMeter => (g.__tathabbatCost ??= new DailyCostMeter());
+/** عدّاد المسار الآلي (بالتوكن): منفصل وبسقف أعلى من العام */
+export const sharedMachineMeter = (): DailyCostMeter => (g.__tathabbatMachineCost ??= new DailyCostMeter());

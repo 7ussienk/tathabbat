@@ -126,3 +126,41 @@ describe("حدّا النص والادعاءات", () => {
     expect((await extractClaims(llm, text)).claims).toHaveLength(6);
   });
 });
+
+describe("المسار الآلي بالتوكن (/api/machine/verify)", () => {
+  const withToken = (ip = "7.7.7.7", token = "tok-test-123456") =>
+    new Request("http://x/api/machine/verify", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}`, "x-forwarded-for": ip }, body: JSON.stringify({ text: "نص" }) });
+  const call = async (req: Request, env: Record<string, string>, meter: DailyCostMeter, verify = vi.fn(async () => okResponse(1.0))) => {
+    const { handleMachineVerify } = await import("../lib/api-guard");
+    return { r: await handleMachineVerify(req, { env: env as unknown as NodeJS.ProcessEnv, meter, verify }), verify };
+  };
+
+  it("بلا توكن صحيح ⟵ 401 بلا معالجة؛ والسقف الافتراضي 3$ وهو أعلى من العام (1.5$)", async () => {
+    process.env.VERIFY_API_TOKEN = "tok-test-123456";
+    const meter = new DailyCostMeter();
+    const bad = await call(withToken("1.1.1.1", "wrong"), {}, meter);
+    expect(bad.r.status).toBe(401);
+    expect(bad.verify).not.toHaveBeenCalled();
+    const c = getConfig({} as unknown as NodeJS.ProcessEnv);
+    expect(c.MACHINE_COST_DAILY_CAP_USD).toBe(3);
+    expect(c.MACHINE_COST_DAILY_CAP_USD).toBeGreaterThan(c.COST_DAILY_CAP_USD);
+  });
+
+  it("يعمل بالتوكن حتى بلوغ سقف التكلفة اليومي ثم 429 بلا نداء", async () => {
+    process.env.VERIFY_API_TOKEN = "tok-test-123456";
+    const meter = new DailyCostMeter();
+    const verify = vi.fn(async () => okResponse(1.7));
+    expect((await call(withToken(), {}, meter, verify)).r.status).toBe(200); // 1.7
+    expect((await call(withToken(), {}, meter, verify)).r.status).toBe(200); // 3.4 (الفحص قبل الطلب: 1.7 < 3)
+    const blocked = await call(withToken(), {}, meter, verify);
+    expect(blocked.r.status).toBe(429);
+    expect(verify).toHaveBeenCalledTimes(2);
+  });
+
+  it("VERIFY_DISABLED=1 يوقفه أيضاً", async () => {
+    process.env.VERIFY_API_TOKEN = "tok-test-123456";
+    const { r, verify } = await call(withToken(), { VERIFY_DISABLED: "1" }, new DailyCostMeter());
+    expect(r.status).toBe(503);
+    expect(verify).not.toHaveBeenCalled();
+  });
+});

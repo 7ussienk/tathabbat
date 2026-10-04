@@ -67,7 +67,8 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
   let usage = zeroUsage();
   /** أثر نداءات النموذج (الخطوة والنموذج والزمن والنتيجة): مصدر أي تأخر، تقني بلا نص */
   const trace: CallMeta[] = [];
-  const traceOut = () => trace.map((t) => ({ label: t.label, attempts: t.attempts.map((a) => ({ model: a.model, ms: a.ms, outcome: a.outcome })) }));
+  const traceOut = () => trace.map((t) => ({ label: t.label, attempts: t.attempts.map((a) => ({ model: a.model, ms: a.ms, outcome: a.outcome })), ...(t.note ? { note: t.note } : {}) }));
+  const servedModels = () => [...new Set(trace.flatMap((t) => t.attempts.filter((a) => a.outcome === "ok").map((a) => a.model)))].sort();
   const noteFailure = (label: string, e: unknown) => {
     const attempts = (e as LLMError).attempts;
     if (attempts?.length) trace.push({ label, attempts });
@@ -86,6 +87,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       timings_ms: timings,
       versions: { ...VERSIONS },
       llm_trace: traceOut(),
+      served_models: servedModels(),
       source_titles: Object.fromEntries(
         [...new Set(partial.claims.flatMap((c) => c.checked_sources ?? []))].flatMap((id) => (store?.sourceMeta[id] ? [[id, store.sourceMeta[id].title]] : [])),
       ),
@@ -108,6 +110,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       cost_estimate_usd: res.usage!.cost_usd,
       error_code: res.error?.code,
       llm_calls: res.llm_trace,
+      served_models: res.served_models,
     });
     return res;
   };

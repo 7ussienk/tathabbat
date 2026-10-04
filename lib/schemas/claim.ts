@@ -92,9 +92,12 @@ export const VerifyResponseSchema = z.object({
       z.object({
         label: z.string(),
         attempts: z.array(z.object({ model: z.string(), ms: z.number(), outcome: z.enum(["ok", "timeout", "error", "invalid_output"]) })),
+        note: z.enum(["breaker_open", "breaker_probe"]).optional(),
       }),
     )
     .optional(),
+  /** النماذج التي خدمت فعلاً نداءات هذا الطلب (محاولات نجحت)، بلا نص رسالة: مثل ["gemini-3.7-flash"] */
+  served_models: z.array(z.string()).optional(),
   /** نسخة المعجم والبرومتات التي أنتجت هذا الرد (lib/versions.ts) */
   versions: z.object({ lexicon: z.string(), prompts: z.string(), scoring: z.string().optional() }).optional(),
 });

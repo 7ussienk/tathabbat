@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { GeminiProvider } from "../lib/llm/gemini";
+import { GeminiProvider, resetBreakers } from "../lib/llm/gemini";
 import { LLMError } from "../lib/llm/provider";
 
 const schema = z.object({ ok: z.boolean() });
@@ -19,6 +19,9 @@ function provider(behaviour: Record<string, () => Promise<unknown>>, fallback: s
 }
 
 describe("GeminiProvider: المحاولة الأولى ثم الاحتياطي (لا إعادة على النموذج نفسه)", () => {
+  // حالة قاطع الدائرة مشتركة في العملية فتُصفَّر بين الاختبارات (قاطع الدائرة: tests/breaker.test.ts)
+  beforeEach(() => resetBreakers());
+
   it("نجاح الأولى: لا استدعاء احتياطي، والمهلة الأولى 8ث", async () => {
     const { p, calls } = provider({ "main-model": async () => ({ data: { ok: true }, usage }) });
     const r = await p.generateJson(req);
