@@ -59,7 +59,7 @@ export function ClaimCard({ claim, sourceTitles }: { claim: ClaimResult; sourceT
         />
       ))}
 
-      {c.authentic_alternative && (
+      {c.authentic_alternative && !isQuran && (
         <div className="rounded-xl border border-ok/40 bg-ok/10 p-4">
           <p className="mb-2 text-sm font-medium text-ok">البديل الصحيح</p>
           <blockquote className="font-quote text-[1.375rem] leading-[2.2] text-offwhite" lang="ar">

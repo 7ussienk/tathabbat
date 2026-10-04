@@ -104,7 +104,7 @@ const LEVELS: Record<"A" | "B" | "C" | "D", { ar: string; hint: string }> = {
 export function LevelBadge({ level }: { level: "A" | "B" | "C" | "D" }) {
   const l = LEVELS[level];
   return (
-    <span title={l.hint} className="inline-flex items-center gap-1.5 rounded-full border border-card px-3 py-1 text-sm text-muted-light">
+    <span title={l.hint} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-card px-3 py-1 text-sm text-muted-light">
       <span className="sr-only">مستوى المحتوى:</span>
       المستوى {l.ar}
     </span>

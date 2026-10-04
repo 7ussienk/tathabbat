@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           تخطَّ إلى المحتوى
         </a>
         <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 pt-5">
-          <Link href="/" className="rounded-lg text-2xl font-bold text-turquoise" aria-label="تثبّت: الصفحة الرئيسية">
+          <Link href="/" className="inline-flex min-h-11 items-center rounded-lg text-2xl font-bold text-turquoise" aria-label="تثبّت: الصفحة الرئيسية">
             تثبّت
           </Link>
           <nav aria-label="التنقل الرئيسي">

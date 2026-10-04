@@ -112,7 +112,7 @@ export default async function Methodology() {
 
       <section className="space-y-2 text-sm text-muted-light">
         <p>
-          نص القرآن: Tanzil Quran Text (Uthmani v1.1) من <a className="text-turquoise underline underline-offset-4" href="https://tanzil.net" target="_blank" rel="noopener noreferrer">tanzil.net</a>، بترخيص Creative Commons Attribution 3.0، يُستخدم حرفياً دون تعديل.
+          نص القرآن: Tanzil Quran Text (Uthmani v1.1) من <a className="inline-flex min-h-11 items-center px-1 text-turquoise underline underline-offset-4" href="https://tanzil.net" target="_blank" rel="noopener noreferrer">tanzil.net</a>، بترخيص Creative Commons Attribution 3.0، يُستخدم حرفياً دون تعديل.
         </p>
         <p>نصوص الكتب مأخوذة من تراث، وقورنت بعينة من الشاملة (التفصيل في سجل المصادر في المستودع).</p>
       </section>

@@ -36,7 +36,7 @@ export function SourceQuote({ s, label = "نص منقول من المصدر", qu
       </blockquote>
       {hasContext && (
         <details className="mt-3 rounded-lg border border-card p-3">
-          <summary className="min-h-6 cursor-pointer text-sm text-line">السياق من نص المدخل (حرفي)</summary>
+          <summary className="flex min-h-11 cursor-pointer items-center text-sm text-line">السياق من نص المدخل (حرفي)</summary>
           <p className={`${font} mt-2 whitespace-pre-line text-lg leading-[2.1] text-line`}>{s.quoted_text}</p>
         </details>
       )}
