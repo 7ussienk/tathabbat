@@ -33,9 +33,9 @@
   --color-warn: var(--warn);
   --color-danger: var(--danger);
   --color-info: var(--info);
-  --font-sans: var(--font-readex), system-ui, sans-serif;
-  --font-quote: var(--font-amiri), "Amiri", serif;
-  --font-quran: var(--font-amiri-quran), "Amiri Quran", var(--font-amiri), serif;
+  --font-sans: var(--font-readex), var(--font-scheherazade), system-ui, sans-serif;
+  --font-quote: var(--font-amiri), "Amiri", var(--font-scheherazade), "Scheherazade New", serif;
+  --font-quran: var(--font-amiri-quran), "Amiri Quran", var(--font-amiri), var(--font-scheherazade), serif;
 }
 
 html {
@@ -45,7 +45,7 @@ html {
 
 body {
   min-height: 100dvh;
-  font-family: var(--font-readex), system-ui, sans-serif;
+  font-family: var(--font-readex), var(--font-scheherazade), system-ui, sans-serif;
   font-size: 1.125rem;
   line-height: 1.8;
   /* زخرفة القالب مختزلة: توهّجان خفيفان في زاويتين (DESIGN.md §4) */

@@ -81,6 +81,7 @@ const VERDICT_ICON: Record<Verdict, IconName> = {
   search_unavailable: "minus",
   not_a_religious_claim: "minus",
   scholar_text_only: "info",
+  wording_differs: "alert",
   refer_to_scholar: "info",
 };
 

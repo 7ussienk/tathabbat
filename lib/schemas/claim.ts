@@ -15,6 +15,7 @@ export const VERDICTS = [
   "misattributed",
   "quran_verified",
   "quran_misquoted",
+  "wording_differs", // اللفظ يختلف عمّا في المصدر: يُعرض لفظ المصدر حرفياً دون وصف الادعاء بالخطأ (scoring-2026-10-04.2)
   "refer_to_scholar",
   "not_a_religious_claim",
 ] as const;
@@ -31,6 +32,7 @@ export const POSITIVE_VERDICTS: readonly Verdict[] = [
   "quran_verified",
   "quran_misquoted",
   "scholar_text_only",
+  "wording_differs", // مسنَد: يعرض لفظ المصدر بمصدره وموضعه (القاعدة 11: يُحتسب كـscholar_text_only)
 ];
 
 export const SourceRefSchema = z.object({
@@ -41,6 +43,8 @@ export const SourceRefSchema = z.object({
   quoted_text: z.string(), // حرفي من المصدر (يقتطعه الكود لا النموذج)
   grading_quote: z.string().optional(), // حكم الإمام بنصه
   attribution_note: z.string().optional(),
+  /** موضع بداية المتن (فهرس حرف في quoted_text) في الصحيحين: ما قبله إسناد يُطوى في الواجهة والنص الكامل يبقى */
+  matn_from: z.number().int().nonnegative().optional(),
   url: z.string().optional(), // صفحة المصدر (تراث للمدخلات الحية، الشاملة للمنتقى)
 });
 export type SourceRef = z.infer<typeof SourceRefSchema>;
@@ -90,6 +94,6 @@ export const VerifyResponseSchema = z.object({
     )
     .optional(),
   /** نسخة المعجم والبرومتات التي أنتجت هذا الرد (lib/versions.ts) */
-  versions: z.object({ lexicon: z.string(), prompts: z.string() }).optional(),
+  versions: z.object({ lexicon: z.string(), prompts: z.string(), scoring: z.string().optional() }).optional(),
 });
 export type VerifyResponse = z.infer<typeof VerifyResponseSchema>;

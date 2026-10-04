@@ -7,7 +7,9 @@ import { GeminiProvider } from "@/lib/llm/gemini";
 import { LLMError, type CallMeta, type LLMProvider, type LLMUsage } from "@/lib/llm/provider";
 import { logRequest } from "@/lib/log";
 import { VERSIONS } from "@/lib/versions";
-import { buildCollection, buildCurated, buildLive, mergeCollection, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
+import { checkCurated, checkEntry, exactCollection, nearestEntry } from "@/lib/pipeline/ordered-check";
+import type { CollectionHit } from "@/lib/pipeline/judge";
+import { buildCollection, buildCurated, buildLive, buildWordingFromCurated, buildWordingFromEntry, mergeCollection, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
 import { composeReply, DISCLAIMER } from "@/lib/pipeline/compose-reply";
 import { extractClaims } from "@/lib/pipeline/extract-claims";
 import { judgeClaim } from "@/lib/pipeline/judge";
@@ -188,13 +190,43 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
     if (d.meta) trace.push(d.meta);
     const retrievedIds = new Set(retrieved.candidates.map((x) => x.id));
 
+    // بعد اختيار المرشح: مطابقة اللفظ المرتّبة (scoring-2026-10-04.2). المطابقة التامة وحدها تأخذ حكم المدخل؛
+    // القريبة (أو المعاد ترتيبها) ⟵ wording_differs (لفظ المصدر حرفياً بلا حكم)، والبعيدة ⟵ لا مطابقة (not_found_in_sources).
+    // والحديث الواحد يتكرر في الصحيحين بألفاظ متقاربة: فإن طابق لفظ الادعاء أحد مداخلهما المسترجعة مطابقة تامة فهو authentic.
+    const far = (o: { lcsCov: number }, conf: number) => buildNotFound(c, idx, store, `ordered_mismatch:lcs=${o.lcsCov.toFixed(2)}`, conf * 0.5);
+    const sahih = d.kind === "none" ? undefined : exactCollection(c.claim_text, retrieved.candidates);
+    const viaSahih = (conf: number): ClaimResult => {
+      const hit: CollectionHit = { candidate: sahih!, coverage: 1, confidence: conf };
+      return validateClaim(buildCollection(c, idx, { kind: "collection", hit, confidence: conf, usage: d.usage, meta: d.meta }, store), { store, retrievedIds });
+    };
     let r: ClaimResult;
     if (d.kind === "none") r = buildNotFound(c, idx, store, d.reason, d.confidence);
-    else if (d.kind === "curated") r = validateClaim(buildCurated(c, idx, d, store), { store, retrievedIds, curatedId: d.candidate.id });
-    else if (d.kind === "collection") r = validateClaim(buildCollection(c, idx, d, store), { store, retrievedIds });
-    else {
-      const live = buildLive(c, idx, d, store);
-      r = validateClaim(d.collection ? mergeCollection(live, c, idx, d.collection, store) : live, { store, retrievedIds });
+    else if (d.kind === "curated") {
+      const o = checkCurated(c.claim_text, d.candidate.curated, store);
+      if (o.kind === "exact") r = validateClaim(buildCurated(c, idx, d, store), { store, retrievedIds, curatedId: d.candidate.id });
+      else if (sahih) r = viaSahih(Math.max(d.confidence, 0.9));
+      else if (o.kind === "near") r = validateClaim(buildWordingFromCurated(c, idx, store, d.candidate.curated, d.confidence, o), { store, retrievedIds, curatedId: d.candidate.id });
+      else r = far(o, d.confidence);
+    } else if (d.kind === "collection") {
+      const e = d.hit.candidate.entry;
+      const o = checkEntry(c.claim_text, e);
+      if (o.kind === "exact") r = validateClaim(buildCollection(c, idx, d, store), { store, retrievedIds });
+      else if (sahih) r = viaSahih(Math.max(d.confidence, 0.9));
+      else if (o.kind === "near") {
+        const n = nearestEntry(c.claim_text, e, retrieved.candidates) ?? { entry: e, o };
+        r = validateClaim(buildWordingFromEntry(c, idx, store, n.entry, d.confidence, n.o), { store, retrievedIds });
+      } else r = far(o, d.confidence);
+    } else {
+      const e = d.candidate.entry;
+      const o = checkEntry(c.claim_text, e);
+      if (o.kind === "exact") {
+        const live = buildLive(c, idx, d, store);
+        r = validateClaim(sahih ? mergeCollection(live, c, idx, { candidate: sahih, coverage: 1, confidence: d.confidence }, store) : live, { store, retrievedIds });
+      } else if (sahih) r = viaSahih(Math.max(d.confidence, 0.9));
+      else if (o.kind === "near") {
+        const n = nearestEntry(c.claim_text, e, retrieved.candidates) ?? { entry: e, o };
+        r = validateClaim(buildWordingFromEntry(c, idx, store, n.entry, d.confidence, n.o), { store, retrievedIds });
+      } else r = far(o, d.confidence);
     }
 
     if (r.verdict === "not_found_in_sources" && c.claim_type === "quran") {

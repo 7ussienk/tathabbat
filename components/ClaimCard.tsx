@@ -48,6 +48,12 @@ export function ClaimCard({ claim, sourceTitles }: { claim: ClaimResult; sourceT
         </div>
       )}
 
+      {c.verdict === "wording_differs" && (
+        <p className="rounded-xl border border-warn/40 bg-warn/10 p-4 text-warn">
+          اللفظ الذي وصلك يختلف عمّا في المصدر. هذا لفظ المصدر نفسه، وقد يكون ما وصلك روايةً أخرى للحديث؛ لا نصف ما وصلك بالخطأ ولا بالكذب، لكننا لا نحكم عليه بلفظه هذا.
+        </p>
+      )}
+
       {c.verdict === "quran_misquoted" && <p className="text-base text-warn">النص الصحيح للآية كما في المصحف:</p>}
 
       {c.sources.map((s, i) => (
@@ -55,7 +61,7 @@ export function ClaimCard({ claim, sourceTitles }: { claim: ClaimResult; sourceT
           key={`${s.source_id}-${s.location}-${i}`}
           s={s}
           quran={isQuran}
-          label={c.verdict === "disputed" ? "قول منقول من المصدر (دون ترجيح)" : isQuran ? "نص الآية من المصحف" : "نص منقول من المصدر"}
+          label={c.verdict === "wording_differs" ? "لفظ الحديث في المصدر" : c.verdict === "disputed" ? "قول منقول من المصدر (دون ترجيح)" : isQuran ? "نص الآية من المصحف" : "نص منقول من المصدر"}
         />
       ))}
 

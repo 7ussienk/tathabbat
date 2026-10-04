@@ -129,9 +129,9 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
     expect(c.sources).toEqual([]);
   });
 
-  it("المنتقى يسبق: إن تناول مرشح حي ومنتقى الحديث نفسه فالحكم من المنتقى البشري", async () => {
-    const { p } = run("أحب الأسماء إلى الله عبد الله وعبد الرحمن", {
-      extract: extract({ claim_text: "أحب الأسماء إلى الله عبد الله وعبد الرحمن" }),
+  it("المنتقى يسبق: إن تناول مرشح حي ومنتقى الحديث نفسه (باللفظ نفسه) فالحكم من المنتقى البشري", async () => {
+    const { p } = run("إن أحب أسمائكم إلى الله عبد الله وعبد الرحمن", {
+      extract: extract({ claim_text: "إن أحب أسمائكم إلى الله عبد الله وعبد الرحمن" }),
       judge: () => ({ curated_id: "curated#A002", book_id: "maqasid-sakhawi#28", collection_id: null, grading_sentence: null, proposed_class: "none" }),
     });
     const c = (await p).claims[0];
@@ -149,8 +149,8 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
     expect(c.downgrade_reason).toBe("chosen_id_not_in_results");
   });
 
-  it("ادعاء يحوي صيغة المنتقى كاملة وزيادة تفصيل لا يُظلم في الثقة (احتواء)", async () => {
-    const claim = "من تهاون بصلاته عاقبه الله بخمس عشرة عقوبة، ستة في الدنيا وثلاثة عند الموت وثلاثة في القبر وثلاثة يوم القيامة";
+  it("صيغة المنتقى المعتمدة (alias) تُعدّ مطابقة تامة ⟵ حكم المنتقى (W008)", async () => {
+    const claim = "من تهاون بصلاته عاقبه الله بخمس عشرة عقوبة";
     const { p } = run(claim, {
       extract: extract({ claim_text: claim }),
       judge: () => ({ curated_id: "curated#W008", book_id: null, collection_id: null, grading_sentence: null, proposed_class: "none" }),
@@ -158,6 +158,61 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
     const c = (await p).claims[0];
     expect(c.verdict).toBe("fabricated");
     expect(c.confidence).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it("ادعاء يمدّ صيغة المنتقى بزيادة ليست في أي alias لا يأخذ حكمها (لا حكم بلفظ مختلف، scoring-2026-10-04.2)", async () => {
+    const claim = "من تهاون بصلاته عاقبه الله بخمس عشرة عقوبة، ستة في الدنيا وثلاثة عند الموت وثلاثة في القبر وثلاثة يوم القيامة";
+    const { p } = run(claim, {
+      extract: extract({ claim_text: claim }),
+      judge: () => ({ curated_id: "curated#W008", book_id: null, collection_id: null, grading_sentence: null, proposed_class: "none" }),
+    });
+    const c = (await p).claims[0];
+    expect(c.verdict).not.toBe("fabricated");
+    expect(["wording_differs", "not_found_in_sources"]).toContain(c.verdict);
+  });
+
+  describe("المطابقة المرتّبة: لا authentic بلفظ مختلف", () => {
+    const pickBukhari = (req: { input: unknown }) => /<candidate id="(sahih-bukhari#\d+)"/.exec(String(req.input))?.[1] ?? null;
+    const viaCollection = (claim: string) =>
+      run(claim, {
+        extract: extract({ claim_text: claim }),
+        judge: (req) => ({ curated_id: null, book_id: null, collection_id: pickBukhari(req), grading_sentence: null, proposed_class: "none" }),
+      }).p;
+    const viaCurated = (claim: string, id: string) =>
+      run(claim, {
+        extract: extract({ claim_text: claim }),
+        judge: () => ({ curated_id: id, book_id: null, collection_id: null, grading_sentence: null, proposed_class: "none" }),
+      }).p;
+
+    it("«إنما الأعمال بالنيات» authentic، و«انما النيات بالاعمال» wording_differs (الخلل المسجَّل)", async () => {
+      const ok = (await viaCurated("إنما الأعمال بالنيات", "curated#A004")).claims[0];
+      expect(ok.verdict).toBe("authentic");
+      const swapped = (await viaCurated("انما النيات بالاعمال", "curated#A004")).claims[0];
+      expect(swapped.verdict).toBe("wording_differs");
+      expect(swapped.sources[0].grading_quote).toBeUndefined();
+      expect(swapped.sources[0].quoted_text).toContain("الْأَعْمَالُ");
+      expect(swapped.review_status).toBe("pending_review");
+    });
+
+    it("حذف «لا» من «لا يؤمن أحدكم…» ⟵ wording_differs ولا authentic، في مسارَي المنتقى والفهرس", async () => {
+      const del = "يؤمن أحدكم حتى يحب لأخيه ما يحب لنفسه";
+      expect((await viaCurated(del, "curated#A006")).claims[0].verdict).toBe("wording_differs");
+      expect((await viaCollection(del)).claims[0].verdict).not.toBe("authentic");
+      expect((await viaCurated("لا يؤمن أحدكم حتى يحب لأخيه ما يحب لنفسه", "curated#A006")).claims[0].verdict).toBe("authentic");
+    });
+
+    it("رد wording_differs: لفظ المصدر بموضعه وتنبيه، بلا وصف بالخطأ أو الكذب", async () => {
+      const r = await viaCurated("يؤمن أحدكم حتى يحب لأخيه ما يحب لنفسه", "curated#A006");
+      expect(r.reply_text).toContain("لفظ الحديث في «");
+      expect(r.reply_text).toContain("قد يكون هذا روايةً أخرى");
+      expect(r.reply_text).not.toMatch(/كاذب|مكذوب|باطل/);
+      VerifyResponseSchema.parse(r);
+    });
+
+    it("«انشرها تؤجر» في آخر الادعاء لا تُسقط المطابقة التامة (ضابط)", async () => {
+      const c = (await viaCurated("لا يؤمن أحدكم حتى يحب لأخيه ما يحب لنفسه انشرها تؤجر", "curated#A006")).claims[0];
+      expect(["authentic", "wording_differs"]).toContain(c.verdict);
+    });
   });
 
   it("القرآن: تحريف كلمة ⇒ quran_misquoted مع النص الصحيح من الملف دون استدعاء الحكم", async () => {

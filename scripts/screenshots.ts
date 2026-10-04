@@ -73,6 +73,29 @@ try {
       }
     }
 
+    // 4ب) لفظ يختلف عن المصدر (قرار 105): المتن ظاهر والإسناد مطوي، ثم مفتوحاً للتحقق من رمز الترضي ﵁
+    if (!noLive) {
+      await page.goto(BASE, { waitUntil: "networkidle" });
+      await page.locator("textarea").fill("انما النيات بالاعمال");
+      await page.getByRole("button", { name: "تثبّت", exact: true }).click();
+      await page.locator("article").first().waitFor({ timeout: 60_000 });
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `${OUT}/wording-${size.name}.png`, fullPage: true });
+      await checks(page, "wording");
+      const summary = page.getByText("عرض الإسناد").first();
+      if (await summary.count()) {
+        await summary.click();
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: `${OUT}/wording-isnad-${size.name}.png`, fullPage: true });
+        const probe = await page.evaluate(() => {
+          const el = document.querySelector("[data-part=isnad]");
+          const t = el?.textContent ?? "";
+          return { len: t.length, hasFD4x: /[﵀-﵏]/.test(t), matnInDom: !!document.querySelector("[data-part=matn]") };
+        });
+        console.log(`  [wording] isnad: ${JSON.stringify(probe)}`);
+      } else console.log("  [wording] لا زر «عرض الإسناد» في النتيجة");
+    }
+
     // 5) المنهجية
     await page.goto(`${BASE}/methodology`, { waitUntil: "networkidle" });
     await page.screenshot({ path: `${OUT}/methodology-${size.name}.png`, fullPage: true });

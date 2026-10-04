@@ -12,14 +12,14 @@
  * يكتب التقرير إلى eval/report.md ونتائج الحالات الخام إلى eval/results/ (خارج Git).
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { containsNormalized } from "../lib/arabic/normalize";
 import { getConfig } from "../lib/config";
 import { lexicalOverlap } from "../lib/pipeline/retrieve";
 import { verifyQuran } from "../lib/quran/quran";
 import { getStore, type Store } from "../lib/retrieval/store";
 import { POSITIVE_VERDICTS, type ClaimResult, type VerifyResponse } from "../lib/schemas/claim";
-import { LEXICON_VERSION, PROMPT_VERSION } from "../lib/versions";
+import { LEXICON_VERSION, PROMPT_VERSION, SCORING_VERSION } from "../lib/versions";
 import { verifyMessage } from "../lib/verify-message";
 
 process.loadEnvFile(".env");
@@ -44,6 +44,8 @@ const LIMIT = Number(opt("--limit") ?? 10_000);
 const readJsonl = <T>(p: string): T[] => readFileSync(p, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as T);
 const dataset = readJsonl<Row>(DATASET).filter((r) => r.input_type === "text").slice(0, LIMIT);
 const leakage = readJsonl<Row>("eval/leakage.jsonl");
+/** حالات تعديل اللفظ والضوابط (scripts/gen-wording-cases.ts): حرجة ومصطنعة، في النمطين؛ لا authentic للفظ معدَّل أبداً. */
+const wording = existsSync("eval/wording_altered.jsonl") ? readJsonl<Row>("eval/wording_altered.jsonl") : [];
 
 /** حالات التسرب حسب النمط: مع curated الثلاث الجديدة فقط؛ بدونها الخمس (L001/L002 تأخذ نص T008/T048 ويُتوقع فيهما الامتناع). */
 function rowsFor(mode: Mode): Row[] {
@@ -55,7 +57,7 @@ function rowsFor(mode: Mode): Row[] {
       extra.push({ ...base, id: r.id, category: "leakage", critical: true, leakage: true, expected: base.expected.map((e) => ({ claim_hint: e.claim_hint, accept: ["not_found_in_sources"], level: e.level })) });
     } else extra.push({ ...r, category: "leakage", leakage: true });
   }
-  return [...dataset, ...extra];
+  return [...dataset, ...extra, ...wording];
 }
 
 const store: Store = await getStore();
@@ -150,7 +152,7 @@ const commit = (() => { try { return execFileSync("git", ["rev-parse", "--short"
 const L: string[] = [];
 L.push("# تقرير التقييم", "");
 L.push(`> **غير نهائي**: مجموعة التحقق المستقلة لم تُوسَم/تُشغَّل بعد، فلا تُقرأ الأرقام أدناه دقةً نهائية للتسليم.`, "");
-L.push(`- التاريخ: ${new Date().toISOString()} | commit: \`${commit}\` | المعجم: \`${LEXICON_VERSION}\` | البرومتات: \`${PROMPT_VERSION}\``);
+L.push(`- التاريخ: ${new Date().toISOString()} | commit: \`${commit}\` | المعجم: \`${LEXICON_VERSION}\` | البرومتات: \`${PROMPT_VERSION}\` | التسجيل: \`${SCORING_VERSION}\``);
 L.push(`- النموذج: \`${cfg.GEMINI_MODEL}\` (احتياطي \`${cfg.GEMINI_FALLBACK_MODEL}\`) | ${RUNS} تشغيلات، توازٍ ${CONC} | عتبة الثقة ${cfg.CONFIDENCE_THRESHOLD}`);
 L.push(`- الكتب المفهرسة: ${store.indexedSources.join("، ")} (+ ${store.curated.size} مدخل منتقى في نمط «مع curated»)`, "");
 
@@ -186,6 +188,8 @@ function section(mode: Mode) {
   const pos = rs.filter((r) => r.positive);
   L.push(`**الإسناد** (الأحكام الإيجابية فقط، القاعدة 11): ${per((x) => { const p = x.filter((r) => r.positive); return `${p.filter((r) => r.sourced).length}/${p.length} (${pct(p.filter((r) => r.sourced).length, p.length)})`; })}`);
   L.push(`**تدقيق المصادر المستقل (اختلاق مصدر؛ الهدف 0):** ${per((x) => String(x.reduce((a, r) => a + r.badSources, 0)))} | **أحكام خُفِّضت لفشل التحقق:** ${per((x) => String(x.filter((r) => r.downgraded).length))}`);
+  const altered = rs.filter((r) => r.category === "hadith_wording_altered");
+  L.push(`**authentic على لفظ معدَّل (خطأ حرج؛ الهدف 0):** ${per((x) => String(x.filter((r) => r.category === "hadith_wording_altered" && r.verdict === "authentic").length))} من ${altered.length / runs.length} حالة معدَّلة`);
   const synthWrong = rs.filter((r) => r.synthetic && r.verdict === "no_basis_per_scholar");
   L.push(`**مصطنعة نُسب لها حكم منقول (خطأ حرج):** ${synthWrong.length}`, "");
   // الثبات
@@ -212,7 +216,7 @@ function section(mode: Mode) {
 for (const m of MODES) section(m);
 
 mkdirSync("eval/results", { recursive: true });
-writeFileSync(`eval/results/run-${Date.now()}.json`, JSON.stringify({ versions: { lexicon: LEXICON_VERSION, prompts: PROMPT_VERSION }, commit, recs }, null, 0));
+writeFileSync(`eval/results/run-${Date.now()}.json`, JSON.stringify({ versions: { lexicon: LEXICON_VERSION, prompts: PROMPT_VERSION, scoring: SCORING_VERSION }, commit, recs }, null, 0));
 
 // ---------- مجموعة التحقق المستقلة (منفصلة) ----------
 if (VALIDATION) {

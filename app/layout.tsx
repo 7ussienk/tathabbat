@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Amiri, Amiri_Quran, Readex_Pro } from "next/font/google";
+import { Amiri, Amiri_Quran, Readex_Pro, Scheherazade_New } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 
@@ -15,6 +15,9 @@ const amiri = Amiri({ subsets: ["arabic", "latin"], weight: ["400", "700"], vari
 // خط الآيات (علامات الرسم العثماني)
 const amiriQuran = Amiri_Quran({ subsets: ["arabic", "latin"], weight: "400", variable: "--font-amiri-quran", display: "swap" });
 
+// احتياطي لرموز الترضي والترحم U+FD40–FD4F (﵁ وأخواتها) التي لا يحويها Readex ولا Amiri؛ يُرسم بها الرمز وحده ولا يُستبدل النص (تحقق: fontTools)
+const scheherazade = Scheherazade_New({ subsets: ["arabic"], weight: "400", variable: "--font-scheherazade", display: "swap" });
+
 export const metadata: Metadata = {
   title: "تثبّت — مدقق الرسائل الدينية المتداولة",
   description: "أداة ذكاء اصطناعي للمساعدة في التحقق من الرسائل الدينية المتداولة، وليست مفتياً.",
@@ -24,7 +27,7 @@ export const viewport: Viewport = { themeColor: "#12183F", colorScheme: "dark" }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ar" dir="rtl" className={`${readex.variable} ${amiri.variable} ${amiriQuran.variable}`}>
+    <html lang="ar" dir="rtl" className={`${readex.variable} ${amiri.variable} ${amiriQuran.variable} ${scheherazade.variable}`}>
       <body>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:right-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-turquoise focus:px-4 focus:py-2 focus:text-navy">
           تخطَّ إلى المحتوى

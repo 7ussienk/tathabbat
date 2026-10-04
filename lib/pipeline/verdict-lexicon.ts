@@ -41,6 +41,8 @@ const TOKEN_RULES: Rule[] = [
 const PHRASE_RULES: Rule[] = [
   { cls: "no_basis_per_scholar", term: "لا أصل له", re: /(^| )لا اصل (له|لها|لهذا)( |$)/ },
   { cls: "no_basis_per_scholar", term: "لم أقف عليه", re: /(^| )لم اقف (عليه|عليها|له علي اصل|له علي سند)( |$)/ },
+  // قرار 4 أكتوبر (P3): «ما علمته/فما علمته» بمعنى «لم أقف عليه» (lexicon-2026-10-04.3)، وتنتظر مراجعة المرشد
+  { cls: "no_basis_per_scholar", term: "ما علمته", re: /(^| )(?:و|ف)?ما علمته( |$)/, review: true },
   { cls: "weak", term: "لا يصح", re: /(^| )لا يصح( |$)/ },
 ];
 
