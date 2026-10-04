@@ -4,10 +4,12 @@
  */
 import { getConfig, type Config } from "@/lib/config";
 import { GeminiProvider } from "@/lib/llm/gemini";
-import { LLMError, type LLMProvider, type LLMUsage } from "@/lib/llm/provider";
+import { LLMError, type CallMeta, type LLMProvider, type LLMUsage } from "@/lib/llm/provider";
 import { logRequest } from "@/lib/log";
 import { VERSIONS } from "@/lib/versions";
-import { buildCurated, buildLive, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
+import { checkCurated, checkEntry, exactCollection, nearestEntry } from "@/lib/pipeline/ordered-check";
+import type { CollectionHit } from "@/lib/pipeline/judge";
+import { buildCollection, buildCurated, buildLive, buildWordingFromCurated, buildWordingFromEntry, mergeCollection, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
 import { composeReply, DISCLAIMER } from "@/lib/pipeline/compose-reply";
 import { extractClaims } from "@/lib/pipeline/extract-claims";
 import { judgeClaim } from "@/lib/pipeline/judge";
@@ -63,6 +65,13 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
   const config = deps.config ?? getConfig();
   const timings: Record<string, number> = {};
   let usage = zeroUsage();
+  /** أثر نداءات النموذج (الخطوة والنموذج والزمن والنتيجة): مصدر أي تأخر، تقني بلا نص */
+  const trace: CallMeta[] = [];
+  const traceOut = () => trace.map((t) => ({ label: t.label, attempts: t.attempts.map((a) => ({ model: a.model, ms: a.ms, outcome: a.outcome })) }));
+  const noteFailure = (label: string, e: unknown) => {
+    const attempts = (e as LLMError).attempts;
+    if (attempts?.length) trace.push({ label, attempts });
+  };
 
   const finish = (partial: Omit<VerifyResponse, "request_id" | "input_type" | "disclaimer" | "timings_ms" | "usage" | "reply_text" | "telegram_text"> & { reply_text?: string; telegram_text?: string }, store: Store | null): VerifyResponse => {
     timings.total = Date.now() - t0;
@@ -76,6 +85,10 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       disclaimer: DISCLAIMER,
       timings_ms: timings,
       versions: { ...VERSIONS },
+      llm_trace: traceOut(),
+      source_titles: Object.fromEntries(
+        [...new Set(partial.claims.flatMap((c) => c.checked_sources ?? []))].flatMap((id) => (store?.sourceMeta[id] ? [[id, store.sourceMeta[id].title]] : [])),
+      ),
       usage: { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, cost_usd: Math.round(cost * 1e6) / 1e6 },
       ...composed,
       ...partial,
@@ -94,6 +107,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       tokens_out: usage.output_tokens,
       cost_estimate_usd: res.usage!.cost_usd,
       error_code: res.error?.code,
+      llm_calls: res.llm_trace,
     });
     return res;
   };
@@ -101,7 +115,13 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
   const text = input.text.trim();
   if (!text || text.length > MAX_TEXT_CHARS) return finish({ claims: [], status: "error", error: ERRORS.invalid_input }, null);
 
-  const llm = deps.llm !== undefined ? deps.llm : config.GEMINI_API_KEY ? new GeminiProvider(config.GEMINI_API_KEY, config.GEMINI_MODEL, config.LLM_TIMEOUT_MS) : null;
+  const llm = deps.llm !== undefined ? deps.llm : config.GEMINI_API_KEY ? new GeminiProvider({
+          apiKey: config.GEMINI_API_KEY,
+          model: config.GEMINI_MODEL,
+          fallbackModel: config.GEMINI_FALLBACK_MODEL,
+          firstTimeoutMs: config.LLM_FIRST_TIMEOUT_MS,
+          fallbackTimeoutMs: config.LLM_FALLBACK_TIMEOUT_MS,
+        }) : null;
   if (!llm) return finish({ claims: [], status: "error", error: ERRORS.llm_unavailable }, null);
 
   const deadline = t0 + config.OVERALL_TIMEOUT_MS;
@@ -119,7 +139,9 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
     const r = await withDeadline(extractClaims(llm, text), deadline - Date.now());
     extracted = r.claims;
     usage = add(usage, r.usage);
-  } catch {
+    if (r.meta) trace.push(r.meta);
+  } catch (e) {
+    noteFailure("extract", e);
     timings.extract = Date.now() - te;
     return finish({ claims: [], status: "error", error: ERRORS.llm_unavailable }, null);
   }
@@ -138,8 +160,10 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       try {
         return await withDeadline(processClaim(c, idx), deadline - Date.now());
       } catch (e) {
-        if (e instanceof LLMError) llmFailures++;
-        else throw e;
+        if (e instanceof LLMError) {
+          llmFailures++;
+          noteFailure("judge", e);
+        } else throw e;
         return null;
       }
     }),
@@ -163,12 +187,47 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
     const retrieved = retrieve(store, c.claim_text, undefined, { curated: deps.useCurated });
     const d = await judgeClaim(llm!, c.claim_text, retrieved, config.CONFIDENCE_THRESHOLD);
     usage = add(usage, d.usage);
+    if (d.meta) trace.push(d.meta);
     const retrievedIds = new Set(retrieved.candidates.map((x) => x.id));
 
+    // بعد اختيار المرشح: مطابقة اللفظ المرتّبة (scoring-2026-10-04.2). المطابقة التامة وحدها تأخذ حكم المدخل؛
+    // القريبة (أو المعاد ترتيبها) ⟵ wording_differs (لفظ المصدر حرفياً بلا حكم)، والبعيدة ⟵ لا مطابقة (not_found_in_sources).
+    // والحديث الواحد يتكرر في الصحيحين بألفاظ متقاربة: فإن طابق لفظ الادعاء أحد مداخلهما المسترجعة مطابقة تامة فهو authentic.
+    const far = (o: { lcsCov: number }, conf: number) => buildNotFound(c, idx, store, `ordered_mismatch:lcs=${o.lcsCov.toFixed(2)}`, conf * 0.5);
+    const sahih = d.kind === "none" ? undefined : exactCollection(c.claim_text, retrieved.candidates);
+    const viaSahih = (conf: number): ClaimResult => {
+      const hit: CollectionHit = { candidate: sahih!, coverage: 1, confidence: conf };
+      return validateClaim(buildCollection(c, idx, { kind: "collection", hit, confidence: conf, usage: d.usage, meta: d.meta }, store), { store, retrievedIds });
+    };
     let r: ClaimResult;
     if (d.kind === "none") r = buildNotFound(c, idx, store, d.reason, d.confidence);
-    else if (d.kind === "curated") r = validateClaim(buildCurated(c, idx, d, store), { store, retrievedIds, curatedId: d.candidate.id });
-    else r = validateClaim(buildLive(c, idx, d, store), { store, retrievedIds });
+    else if (d.kind === "curated") {
+      const o = checkCurated(c.claim_text, d.candidate.curated, store);
+      if (o.kind === "exact") r = validateClaim(buildCurated(c, idx, d, store), { store, retrievedIds, curatedId: d.candidate.id });
+      else if (sahih) r = viaSahih(Math.max(d.confidence, 0.9));
+      else if (o.kind === "near") r = validateClaim(buildWordingFromCurated(c, idx, store, d.candidate.curated, d.confidence, o), { store, retrievedIds, curatedId: d.candidate.id });
+      else r = far(o, d.confidence);
+    } else if (d.kind === "collection") {
+      const e = d.hit.candidate.entry;
+      const o = checkEntry(c.claim_text, e);
+      if (o.kind === "exact") r = validateClaim(buildCollection(c, idx, d, store), { store, retrievedIds });
+      else if (sahih) r = viaSahih(Math.max(d.confidence, 0.9));
+      else if (o.kind === "near") {
+        const n = nearestEntry(c.claim_text, e, retrieved.candidates) ?? { entry: e, o };
+        r = validateClaim(buildWordingFromEntry(c, idx, store, n.entry, d.confidence, n.o), { store, retrievedIds });
+      } else r = far(o, d.confidence);
+    } else {
+      const e = d.candidate.entry;
+      const o = checkEntry(c.claim_text, e);
+      if (o.kind === "exact") {
+        const live = buildLive(c, idx, d, store);
+        r = validateClaim(sahih ? mergeCollection(live, c, idx, { candidate: sahih, coverage: 1, confidence: d.confidence }, store) : live, { store, retrievedIds });
+      } else if (sahih) r = viaSahih(Math.max(d.confidence, 0.9));
+      else if (o.kind === "near") {
+        const n = nearestEntry(c.claim_text, e, retrieved.candidates) ?? { entry: e, o };
+        r = validateClaim(buildWordingFromEntry(c, idx, store, n.entry, d.confidence, n.o), { store, retrievedIds });
+      } else r = far(o, d.confidence);
+    }
 
     if (r.verdict === "not_found_in_sources" && c.claim_type === "quran") {
       r = { ...r, checked_sources: [QURAN_SOURCE_ID, ...(r.checked_sources ?? [])] };

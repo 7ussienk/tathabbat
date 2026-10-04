@@ -7,6 +7,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadManifest, getBook } from "../lib/sources/manifest";
 import { chunkMaqasid, MAQASID_SOURCE_ID, type BookEntry, type BookFile } from "../lib/retrieval/chunk-maqasid";
+import { BUKHARI_SPEC, MUSLIM_SPEC, chunkHadith } from "../lib/retrieval/chunk-hadith";
 import { linkStubs } from "../lib/retrieval/stubs";
 import { bookDoc, buildIndex, curatedDoc } from "../lib/retrieval/text-index";
 import { CuratedEntrySchema, type CuratedEntry } from "../lib/schemas/curated";
@@ -14,9 +15,11 @@ import { CuratedEntrySchema, type CuratedEntry } from "../lib/schemas/curated";
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, "data", "index");
 
-/** مقطِّعات الكتب المدعومة. الصحيحان تُضاف بعد أن يعمل المسار كاملاً على المقاصد (القاعدة 27). */
+/** مقطِّعات الكتب المدعومة (القاعدة 27): المقاصد الحسنة أولاً ثم الصحيحان. */
 const CHUNKERS: Record<string, (b: BookFile) => BookEntry[]> = {
   [MAQASID_SOURCE_ID]: chunkMaqasid,
+  "sahih-bukhari": (b) => chunkHadith(b, BUKHARI_SPEC),
+  "sahih-muslim": (b) => chunkHadith(b, MUSLIM_SPEC),
 };
 
 export async function loadCurated(): Promise<CuratedEntry[]> {
@@ -41,7 +44,8 @@ async function main() {
       throw new Error(`تعذّر قراءة ${file}: شغّل scripts/fetch-books أولاً (${(e as Error).message})`);
     }
     const chunked = chunk(book);
-    const linked = linkStubs(chunked); // ربط مداخل الإحالة بأهدافها (lib/retrieval/stubs.ts)
+    // ربط مداخل الإحالة بأهدافها (lib/retrieval/stubs.ts): خاص بالمقاصد الحسنة
+    const linked = id === MAQASID_SOURCE_ID ? linkStubs(chunked) : { entries: chunked, stats: undefined };
     const es = linked.entries;
     entries.push(...es);
     checked.push({ id, entries: es.length, truncated: es.filter((x) => x.truncated).length, stubs: linked.stats });
@@ -53,10 +57,10 @@ async function main() {
   const json = JSON.stringify(index);
   await writeFile(path.join(OUT, "text-index.json"), json);
   // بيانات المصادر لوقت التشغيل (العنوان والمؤلف ومعرّف تراث) بلا حاجة لقراءة الـ manifest هناك
-  const source_meta: Record<string, { title: string; author?: string; turath_book_id?: number; reviewed: boolean }> = {};
+  const source_meta: Record<string, { title: string; author?: string; turath_book_id?: number; reviewed: boolean; type: string }> = {};
   for (const m of manifest) {
     if (m.type === "remote_service" || m.type === "external_link_only") continue;
-    source_meta[m.id] = { title: m.title, author: m.author, turath_book_id: m.turath_book_id ?? undefined, reviewed: m.reviewed };
+    source_meta[m.id] = { title: m.title, author: m.author, turath_book_id: m.turath_book_id ?? undefined, reviewed: m.reviewed, type: m.type };
   }
   await writeFile(path.join(OUT, "store.json"), JSON.stringify({ entries, curated, source_meta }));
   await writeFile(

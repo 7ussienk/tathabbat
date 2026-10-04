@@ -28,7 +28,8 @@ export function headOf(rawText: string): string {
 
 export function bookDoc(e: BookEntry): IndexDoc {
   const alias = normalizeArabic((e.see_also ?? []).map((s) => s.alias).join(" "));
-  return { id: e.id, kind: "book", source_id: e.source_id, head: headOf(e.text), alias, text: normalizeArabic(e.text) };
+  const isCollection = e.source_id.startsWith("sahih-"); // الصحيحان: مطلع المدخل أسماء الإسناد فلا يُرجَّح
+  return { id: e.id, kind: "book", source_id: e.source_id, head: isCollection ? "" : headOf(e.text), alias, text: normalizeArabic(e.text) };
 }
 
 export function curatedDoc(c: CuratedEntry): IndexDoc {

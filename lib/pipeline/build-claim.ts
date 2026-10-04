@@ -1,8 +1,11 @@
-import { extractLiteral } from "@/lib/arabic/normalize";
+import { extractLiteral, normalizeArabic, tokenize } from "@/lib/arabic/normalize";
+import { isAuthenticCollection } from "@/lib/pipeline/collections";
+import { matnCharStart, type OrderedResult } from "@/lib/pipeline/ordered-match";
+import type { CuratedEntry } from "@/lib/schemas/curated";
 import { containmentOverlap } from "@/lib/pipeline/retrieve";
 import { headOf } from "@/lib/retrieval/text-index";
 import { decideVerdict, type LexClass } from "@/lib/pipeline/verdict-lexicon";
-import type { JudgeDecision } from "@/lib/pipeline/judge";
+import type { CollectionHit, JudgeDecision } from "@/lib/pipeline/judge";
 import { QURAN_SOURCE_ID, skeletonWords, type QuranMatch } from "@/lib/quran/quran";
 import type { BookEntry } from "@/lib/retrieval/chunk-maqasid";
 import type { Store } from "@/lib/retrieval/store";
@@ -13,6 +16,9 @@ import { verifyLink } from "@/lib/verify-link";
 export type ExtractedClaim = ExtractOutput["claims"][number];
 
 const EXCERPT_MAX = 1200;
+
+/** «السخاوي (ت 902هـ)» ← «السخاوي» */
+export const displayAuthor = (a?: string) => a?.replace(/\s*\([^)]*\)\s*$/, "").trim() || undefined;
 
 export function turathUrl(store: Store, e: BookEntry): string | undefined {
   const tid = store.sourceMeta[e.source_id]?.turath_book_id;
@@ -126,6 +132,7 @@ export function buildCurated(c: ExtractedClaim, idx: number, d: Extract<JudgeDec
     return {
       source_id: s.source_id,
       title: meta?.title ?? s.source_id,
+      author: displayAuthor(meta?.author),
       location: s.location,
       quoted_text: entry ? excerpt(entry.text, literal) : (s.quoted_text ?? s.grading_quote ?? ""),
       grading_quote: s.grading_quote,
@@ -168,6 +175,7 @@ export function buildLive(c: ExtractedClaim, idx: number, d: Extract<JudgeDecisi
   const src: SourceRef = {
     source_id: e.source_id,
     title: meta?.title ?? e.source_id,
+    author: displayAuthor(meta?.author),
     location: e.location,
     quoted_text: excerpt(e.text, literal),
     grading_quote: literal ?? undefined,
@@ -184,4 +192,111 @@ export function buildLive(c: ExtractedClaim, idx: number, d: Extract<JudgeDecisi
     review_status: meta?.reviewed ? "reviewed" : "pending_review",
     lexicon_review_terms: reviewTerms.length ? reviewTerms : undefined,
   };
+}
+
+/** نافذة متصلة (≤ max حرفاً) من نص المدخل حرفياً تضم أكثر كلمات الادعاء؛ لا دمج مقاطع منفصلة. */
+export function bestWindow(text: string, claim: string, max = EXCERPT_MAX): string {
+  if (text.length <= max) return text;
+  const want = new Set(tokenize(normalizeArabic(claim)));
+  const words: { start: number; end: number; hit: boolean }[] = [];
+  for (const m of text.matchAll(/\S+/g)) {
+    const t = tokenize(normalizeArabic(m[0]));
+    words.push({ start: m.index!, end: m.index! + m[0].length, hit: t.some((x) => want.has(x)) });
+  }
+  let best = { i: 0, j: 0, score: -1 };
+  let j = 0;
+  let score = 0;
+  for (let i = 0; i < words.length; i++) {
+    while (j < words.length && words[j].end - words[i].start <= max) {
+      if (words[j].hit) score++;
+      j++;
+    }
+    if (score > best.score) best = { i, j, score };
+    if (words[i].hit) score--;
+  }
+  const a = words[best.i]?.start ?? 0;
+  const b = words[Math.max(best.i, best.j - 1)]?.end ?? Math.min(text.length, max);
+  return text.slice(a, b);
+}
+
+/** نص تنبيه wording_differs (قرار 4 أكتوبر): لا يُوصف الادعاء بالخطأ ولا بالكذب. */
+export const WORDING_NOTE = "هذا لفظ المصدر نفسه. وقد يكون ما وصلك روايةً أخرى للحديث؛ فلا نصف ما أُرسل إليك بالخطأ ولا بالكذب، لكننا لا نستطيع الحكم عليه بلفظه هذا.";
+
+const withMatn = (src: SourceRef): SourceRef => {
+  if (!isAuthenticCollection(src.source_id)) return src;
+  const at = matnCharStart(src.quoted_text);
+  return at ? { ...src, matn_from: at } : src;
+};
+
+/** مصدر من مدخل في كتاب (الصحيحان أو المقاصد): نص حرفي متصل من المدخل حول موضع الادعاء، مع بداية المتن للصحيحين. */
+function entrySource(c: ExtractedClaim, store: Store, e: BookEntry, note?: string): SourceRef {
+  const meta = store.sourceMeta[e.source_id];
+  return withMatn({
+    source_id: e.source_id,
+    title: meta?.title ?? e.source_id,
+    author: displayAuthor(meta?.author),
+    location: e.location,
+    quoted_text: bestWindow(e.text, c.claim_text),
+    attribution_note: note,
+    url: turathUrl(store, e),
+  });
+}
+
+const reviewOf = (store: Store, sourceId: string): ClaimResult["review_status"] => (store.sourceMeta[sourceId]?.reviewed ? "reviewed" : "pending_review");
+
+/** الصحيحان، مطابقة مرتّبة تامة: `authentic` (والحكم مبني على وجود الرواية بلفظها لا على اجتهاد الأداة). */
+export function buildCollection(c: ExtractedClaim, idx: number, d: Extract<JudgeDecision, { kind: "collection" }>, store: Store): ClaimResult {
+  const e = d.hit.candidate.entry;
+  return {
+    ...base(c, idx),
+    verdict: "authentic",
+    confidence: d.confidence,
+    sources: [entrySource(c, store, e, `وردت هذه الرواية في «${store.sourceMeta[e.source_id]?.title ?? e.source_id}» بالموضع المذكور، ولفظ ادعائك مطابق للفظها كلمةً بكلمة وبالترتيب نفسه. والحكم هنا مبني على وجودها فيه لا على اجتهاد الأداة.`)],
+    checked_sources: checkedSources(store),
+    failed_sources: [],
+    review_status: reviewOf(store, e.source_id),
+  };
+}
+
+/**
+ * مدخل حي من كتب الأحكام مع مدخل من الصحيحين مطابق اللفظ تماماً للحديث نفسه: إن لم يحمل كلام العالم حكماً مصنَّفاً فالصحيحان
+ * يثبتان `authentic`؛ وإن حمل حكماً سلبياً (موضوع/لا أصل له/ضعيف…) فتعارض المصدرين ⟵ `disputed` بعرضهما معاً.
+ */
+export function mergeCollection(live: ClaimResult, c: ExtractedClaim, idx: number, hit: CollectionHit, store: Store): ClaimResult {
+  const e = hit.candidate.entry;
+  const src = entrySource(c, store, e);
+  if (live.verdict === "scholar_text_only") {
+    return { ...live, verdict: "authentic", confidence: Math.max(live.confidence, hit.confidence), sources: [src], review_status: reviewOf(store, e.source_id) };
+  }
+  return { ...live, verdict: "disputed", sources: [...live.sources, src], id: `c${idx + 1}` };
+}
+
+/** اللفظ يختلف: يُعرض لفظ المصدر حرفياً مع موضعه بلا حكم المدخل (weak وغيره) ولا وصف الادعاء بالخطأ. */
+function wording(c: ExtractedClaim, idx: number, store: Store, sources: SourceRef[], confidence: number, review: ClaimResult["review_status"], reason: string): ClaimResult {
+  return {
+    ...base(c, idx),
+    verdict: "wording_differs",
+    confidence,
+    sources: sources.map((s) => ({ ...s, grading_quote: undefined, attribution_note: s.attribution_note ?? WORDING_NOTE })),
+    checked_sources: checkedSources(store),
+    failed_sources: [],
+    review_status: review,
+    downgrade_reason: reason,
+  };
+}
+
+export function buildWordingFromEntry(c: ExtractedClaim, idx: number, store: Store, e: BookEntry, confidence: number, o: Extract<OrderedResult, { kind: "near" }>): ClaimResult {
+  return wording(c, idx, store, [entrySource(c, store, e, WORDING_NOTE)], confidence, reviewOf(store, e.source_id), `wording:${o.why}:lcs=${o.lcsCov.toFixed(2)}`);
+}
+
+export function buildWordingFromCurated(c: ExtractedClaim, idx: number, store: Store, cur: CuratedEntry, confidence: number, o: Extract<OrderedResult, { kind: "near" }>): ClaimResult {
+  const sources: SourceRef[] = cur.sources.map((s) => {
+    const n = STORE_NUM.exec(s.location)?.[1];
+    const entry = n ? store.entries.get(`${s.source_id}#${n}`) : undefined;
+    if (entry) return entrySource(c, store, entry, WORDING_NOTE);
+    const meta = store.sourceMeta[s.source_id];
+    // كتاب غير مفهرس: لفظ المنتقى البشري المعتمد (من السجل) لا حكم المؤلف
+    return { source_id: s.source_id, title: meta?.title ?? s.source_id, author: displayAuthor(meta?.author), location: s.location, quoted_text: s.quoted_text ?? cur.claim_text, attribution_note: WORDING_NOTE, url: s.url };
+  });
+  return wording(c, idx, store, sources, confidence, cur.reviewed ? "reviewed" : "pending_review", `wording:curated:lcs=${o.lcsCov.toFixed(2)}`);
 }

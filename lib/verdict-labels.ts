@@ -13,6 +13,7 @@ export const VERDICT_LABELS: Record<Verdict, { label: string; tone: "ok" | "warn
   scholar_text_only: { label: "نص كلام الإمام (بلا تصنيف آلي)", tone: "info" },
   quran_verified: { label: "نص الآية صحيح", tone: "ok" },
   quran_misquoted: { label: "في نص الآية خطأ، وهذا الصحيح", tone: "warn" },
+  wording_differs: { label: "اللفظ يختلف عمّا في المصدر", tone: "warn" },
   refer_to_scholar: { label: "هذا يحتاج سؤال عالم أو جهة إفتاء رسمية", tone: "info" },
   not_a_religious_claim: { label: "لا يوجد ادعاء ديني للتحقق منه", tone: "neutral" },
 };

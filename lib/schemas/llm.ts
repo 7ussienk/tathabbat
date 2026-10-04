@@ -24,6 +24,7 @@ export const PROPOSED_CLASSES = ["fabricated", "no_basis_per_scholar", "weak", "
 export const JudgeOutputSchema = z.object({
   curated_id: z.string().nullable(),
   book_id: z.string().nullable(),
+  collection_id: z.string().nullable(),
   grading_sentence: z.string().nullable(),
   proposed_class: z.enum(PROPOSED_CLASSES),
 });

@@ -45,6 +45,17 @@ function claimBlock(c: ClaimResult, store: Store | null, compact: boolean): stri
       );
       break;
     }
+    case "wording_differs":
+      // لفظ المصدر حرفياً مع موضعه، وتنبيه أنه قد يكون رواية أخرى؛ لا «الحكم المنقول» ولا وصف بالخطأ (قرار 4 أكتوبر)
+      for (const s of c.sources) {
+        const who = authorName(store?.sourceMeta[s.source_id]?.author);
+        const q = compact && s.quoted_text.length > 400 ? `${s.quoted_text.slice(0, 400)}…` : s.quoted_text;
+        lines.push(`  لفظ الحديث في «${s.title}»${who ? ` (${who})` : ""}: «${q}» (${s.location})`);
+        if (s.url) lines.push(`  ${s.url}`);
+      }
+      lines.push("  تنبيه: قد يكون هذا روايةً أخرى للحديث؛ لا نصف ما وصلك بالخطأ ولا بالكذب، لكننا لا نحكم عليه بلفظه هذا.");
+      if (c.review_status === "pending_review") lines.push("  (بانتظار مراجعة شرعية)");
+      break;
     case "quran_verified":
       lines.push(`  ${lab} (${c.sources[0]?.location}):`, `  «${c.sources[0]?.quoted_text}»`);
       break;

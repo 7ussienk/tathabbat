@@ -13,6 +13,14 @@ describe("verdict-lexicon: الأصل (القرار 54)", () => {
     expect(decideVerdict("لا يصح في الباب شيء", "weak").verdict).toBe("weak");
   });
 
+  it("«ما علمته/فما علمته» مرادف «لم أقف عليه» ⟵ no_basis_per_scholar بوسم needs_scholar_review (النسخة .3)", () => {
+    const a = decideVerdict("فما علمته", "no_basis_per_scholar");
+    expect(a.verdict).toBe("no_basis_per_scholar");
+    expect(a.needs_scholar_review).toContain("ما علمته");
+    expect(decideVerdict("قال السخاوي: وما علمته", "none").verdict).toBe("scholar_text_only");
+    expect(classify("كما علمته من شيخي").found).toEqual([]);
+  });
+
   it("لا لفظ في المعجم ⇒ scholar_text_only، ولا authentic آلياً من «صحيح الإسناد»", () => {
     expect(decideVerdict("وسنده صحيح الإسناد ولم يخرجاه", "none").verdict).toBe("scholar_text_only");
     expect(decideVerdict("أخرجه الديلمي في مسنده", "none").verdict).toBe("scholar_text_only");

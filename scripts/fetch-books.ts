@@ -15,10 +15,10 @@ import path from "node:path";
 import { loadManifest, getBook } from "../lib/sources/manifest";
 
 /** كتب البناء الافتراضية. الصحيحان يُضافان بعد أن يعمل المسار كاملاً على المقاصد (القاعدة 27). */
-const DEFAULT_BOOKS = ["maqasid-sakhawi"];
+const DEFAULT_BOOKS = ["maqasid-sakhawi", "sahih-bukhari", "sahih-muslim"];
 
 /** توقعات الشكل لكل كتاب (عدد الصفحات في الملف). عدد المداخل (1355 للمقاصد) يُتحقق منه في المقطِّع. */
-const EXPECTED_PAGES: Record<number, number> = { 1263: 525 };
+const EXPECTED_PAGES: Record<number, number> = { 1263: 525, 735: 11290, 1727: 7495 };
 
 const BASE_URL = "https://files.turath.io/books-v3";
 const TIMEOUT_MS = 90_000;

@@ -13,7 +13,15 @@ export type GenerateJsonRequest<T> = {
   thinking?: "low" | "medium" | "high";
 };
 
+/** محاولة واحدة على نموذج: لمعرفة مصدر التأخر (النموذج والخطوة). تقنية فقط بلا نص. */
+export type CallAttempt = { model: string; ms: number; outcome: "ok" | "timeout" | "error" | "invalid_output"; detail?: string };
+
+export type CallMeta = { label: string; attempts: CallAttempt[] };
+
+export type LLMResult<T> = { data: T; usage: LLMUsage; meta?: CallMeta };
+
 export class LLMError extends Error {
+  attempts?: CallAttempt[];
   constructor(
     message: string,
     readonly kind: "timeout" | "unavailable" | "invalid_output",
@@ -24,5 +32,5 @@ export class LLMError extends Error {
 
 /** واجهة مزود النموذج (قابلة للاستبدال عند التعطل). المخرجات منظمة ويُتحقق منها بـ Zod. */
 export interface LLMProvider {
-  generateJson<T>(req: GenerateJsonRequest<T>): Promise<{ data: T; usage: LLMUsage }>;
+  generateJson<T>(req: GenerateJsonRequest<T>): Promise<LLMResult<T>>;
 }

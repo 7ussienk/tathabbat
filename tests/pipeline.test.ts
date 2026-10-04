@@ -41,7 +41,7 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
   it("مدخل منتقى: الحكم بشري، والنص حرفي من الفهرس، وبانتظار المراجعة، والرد يلتزم بقاعدة الرواية لا المسألة", async () => {
     const { p } = run("اطلبوا العلم ولو بالصين", {
       extract: extract({ claim_text: "اطلبوا العلم ولو بالصين" }),
-      judge: () => ({ curated_id: "curated#W001", book_id: null, grading_sentence: null, proposed_class: "none" }),
+      judge: () => ({ curated_id: "curated#W001", book_id: null, collection_id: null, grading_sentence: null, proposed_class: "none" }),
     });
     const r = await p;
     const c = r.claims[0];
@@ -62,7 +62,7 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
   it("مدخل حي: الكود يقتطع الجملة حرفياً ويحكم بالمعجم (لم أقف عليه ← no_basis_per_scholar)", async () => {
     const { p } = run("آية من كتاب الله خير من محمد وآله", {
       extract: extract({ claim_text: "آية من كتاب الله خير من محمد وآله" }),
-      judge: () => ({ curated_id: null, book_id: "maqasid-sakhawi#5", grading_sentence: "لم أقف عليه", proposed_class: "no_basis_per_scholar" }),
+      judge: () => ({ curated_id: null, book_id: "maqasid-sakhawi#5", collection_id: null, grading_sentence: "لم أقف عليه", proposed_class: "no_basis_per_scholar" }),
     });
     const c = (await p).claims[0];
     expect(c.verdict).toBe("no_basis_per_scholar");
@@ -74,7 +74,7 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
   it("جملة حكم ليست substring من المدخل ⇒ تخفيض إلى not_found_in_sources", async () => {
     const { p } = run("آية من كتاب الله خير من محمد وآله", {
       extract: extract({ claim_text: "آية من كتاب الله خير من محمد وآله" }),
-      judge: () => ({ curated_id: null, book_id: "maqasid-sakhawi#5", grading_sentence: "قال الإمام إنه موضوع قطعاً", proposed_class: "fabricated" }),
+      judge: () => ({ curated_id: null, book_id: "maqasid-sakhawi#5", collection_id: null, grading_sentence: "قال الإمام إنه موضوع قطعاً", proposed_class: "fabricated" }),
     });
     const c = (await p).claims[0];
     expect(c.verdict).toBe("not_found_in_sources");
@@ -85,7 +85,7 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
   it("تعارض التصنيف المقترح مع لفظ الجملة ⇒ disputed", async () => {
     const { p } = run("آية من كتاب الله خير من محمد وآله", {
       extract: extract({ claim_text: "آية من كتاب الله خير من محمد وآله" }),
-      judge: () => ({ curated_id: null, book_id: "maqasid-sakhawi#5", grading_sentence: "لم أقف عليه", proposed_class: "weak" }),
+      judge: () => ({ curated_id: null, book_id: "maqasid-sakhawi#5", collection_id: null, grading_sentence: "لم أقف عليه", proposed_class: "weak" }),
     });
     expect((await p).claims[0].verdict).toBe("disputed");
   });
@@ -93,24 +93,24 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
   it("معرّف مرشح غير موجود في النتائج ⇒ not_found (لا مصدر مختلق)", async () => {
     const { p } = run("اطلبوا العلم ولو بالصين", {
       extract: extract({ claim_text: "اطلبوا العلم ولو بالصين" }),
-      judge: () => ({ curated_id: null, book_id: "maqasid-sakhawi#99999", grading_sentence: "لا أصل له", proposed_class: "no_basis_per_scholar" }),
+      judge: () => ({ curated_id: null, book_id: "maqasid-sakhawi#99999", collection_id: null, grading_sentence: "لا أصل له", proposed_class: "no_basis_per_scholar" }),
     });
     const c = (await p).claims[0];
     expect(c.verdict).toBe("not_found_in_sources");
     expect(c.downgrade_reason).toBe("chosen_id_not_in_results");
-    expect(c.checked_sources).toEqual(["maqasid-sakhawi"]);
+    expect(c.checked_sources).toEqual(["maqasid-sakhawi", "sahih-bukhari", "sahih-muslim"]);
     expect(c.failed_sources).toEqual([]);
   });
 
   it("same_hadith=false أو لا مرشح ⇒ not_found_in_sources", async () => {
     const a = await run("ادعاء وهمي TEST_HADITH_001 لا وجود له", {
       extract: extract({ claim_text: "ادعاء وهمي TEST_HADITH_001 لا وجود له" }),
-      judge: () => ({ curated_id: null, book_id: null, grading_sentence: null, proposed_class: "none" }),
+      judge: () => ({ curated_id: null, book_id: null, collection_id: null, grading_sentence: null, proposed_class: "none" }),
     }).p;
     expect(a.claims[0].verdict).toBe("not_found_in_sources");
     const b = await run("اطلبوا العلم ولو بالصين", {
       extract: extract({ claim_text: "اطلبوا العلم ولو بالصين" }),
-      judge: () => ({ curated_id: null, book_id: null, grading_sentence: null, proposed_class: "none" }),
+      judge: () => ({ curated_id: null, book_id: null, collection_id: null, grading_sentence: null, proposed_class: "none" }),
     }).p;
     expect(b.claims[0].verdict).toBe("not_found_in_sources");
     expect(b.claims[0].downgrade_reason).toBe("no_candidate_chosen");
@@ -121,7 +121,7 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
       extract: extract({ claim_text: "عبارة وهمية TEST_HADITH_002 عن الصبر والعلم" }),
       judge: (req) => {
         const m = /<candidate id="(maqasid-sakhawi#\d+)"/.exec(String(req.input));
-        return { curated_id: null, book_id: m?.[1] ?? null, grading_sentence: "لا أصل له", proposed_class: "no_basis_per_scholar" };
+        return { curated_id: null, book_id: m?.[1] ?? null, collection_id: null, grading_sentence: "لا أصل له", proposed_class: "no_basis_per_scholar" };
       },
     });
     const c = (await p).claims[0];
@@ -129,10 +129,10 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
     expect(c.sources).toEqual([]);
   });
 
-  it("المنتقى يسبق: إن تناول مرشح حي ومنتقى الحديث نفسه فالحكم من المنتقى البشري", async () => {
-    const { p } = run("أحب الأسماء إلى الله عبد الله وعبد الرحمن", {
-      extract: extract({ claim_text: "أحب الأسماء إلى الله عبد الله وعبد الرحمن" }),
-      judge: () => ({ curated_id: "curated#A002", book_id: "maqasid-sakhawi#28", grading_sentence: null, proposed_class: "none" }),
+  it("المنتقى يسبق: إن تناول مرشح حي ومنتقى الحديث نفسه (باللفظ نفسه) فالحكم من المنتقى البشري", async () => {
+    const { p } = run("إن أحب أسمائكم إلى الله عبد الله وعبد الرحمن", {
+      extract: extract({ claim_text: "إن أحب أسمائكم إلى الله عبد الله وعبد الرحمن" }),
+      judge: () => ({ curated_id: "curated#A002", book_id: "maqasid-sakhawi#28", collection_id: null, grading_sentence: null, proposed_class: "none" }),
     });
     const c = (await p).claims[0];
     expect(c.verdict).toBe("authentic");
@@ -142,22 +142,77 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
   it("معرّف من نوع خاطئ (كتاب في حقل المنتقى) يُهمل", async () => {
     const { p } = run("اطلبوا العلم ولو بالصين", {
       extract: extract({ claim_text: "اطلبوا العلم ولو بالصين" }),
-      judge: () => ({ curated_id: "maqasid-sakhawi#125", book_id: null, grading_sentence: null, proposed_class: "none" }),
+      judge: () => ({ curated_id: "maqasid-sakhawi#125", book_id: null, collection_id: null, grading_sentence: null, proposed_class: "none" }),
     });
     const c = (await p).claims[0];
     expect(c.verdict).toBe("not_found_in_sources");
     expect(c.downgrade_reason).toBe("chosen_id_not_in_results");
   });
 
-  it("ادعاء يحوي صيغة المنتقى كاملة وزيادة تفصيل لا يُظلم في الثقة (احتواء)", async () => {
-    const claim = "من تهاون بصلاته عاقبه الله بخمس عشرة عقوبة، ستة في الدنيا وثلاثة عند الموت وثلاثة في القبر وثلاثة يوم القيامة";
+  it("صيغة المنتقى المعتمدة (alias) تُعدّ مطابقة تامة ⟵ حكم المنتقى (W008)", async () => {
+    const claim = "من تهاون بصلاته عاقبه الله بخمس عشرة عقوبة";
     const { p } = run(claim, {
       extract: extract({ claim_text: claim }),
-      judge: () => ({ curated_id: "curated#W008", book_id: null, grading_sentence: null, proposed_class: "none" }),
+      judge: () => ({ curated_id: "curated#W008", book_id: null, collection_id: null, grading_sentence: null, proposed_class: "none" }),
     });
     const c = (await p).claims[0];
     expect(c.verdict).toBe("fabricated");
     expect(c.confidence).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it("ادعاء يمدّ صيغة المنتقى بزيادة ليست في أي alias لا يأخذ حكمها (لا حكم بلفظ مختلف، scoring-2026-10-04.2)", async () => {
+    const claim = "من تهاون بصلاته عاقبه الله بخمس عشرة عقوبة، ستة في الدنيا وثلاثة عند الموت وثلاثة في القبر وثلاثة يوم القيامة";
+    const { p } = run(claim, {
+      extract: extract({ claim_text: claim }),
+      judge: () => ({ curated_id: "curated#W008", book_id: null, collection_id: null, grading_sentence: null, proposed_class: "none" }),
+    });
+    const c = (await p).claims[0];
+    expect(c.verdict).not.toBe("fabricated");
+    expect(["wording_differs", "not_found_in_sources"]).toContain(c.verdict);
+  });
+
+  describe("المطابقة المرتّبة: لا authentic بلفظ مختلف", () => {
+    const pickBukhari = (req: { input: unknown }) => /<candidate id="(sahih-bukhari#\d+)"/.exec(String(req.input))?.[1] ?? null;
+    const viaCollection = (claim: string) =>
+      run(claim, {
+        extract: extract({ claim_text: claim }),
+        judge: (req) => ({ curated_id: null, book_id: null, collection_id: pickBukhari(req), grading_sentence: null, proposed_class: "none" }),
+      }).p;
+    const viaCurated = (claim: string, id: string) =>
+      run(claim, {
+        extract: extract({ claim_text: claim }),
+        judge: () => ({ curated_id: id, book_id: null, collection_id: null, grading_sentence: null, proposed_class: "none" }),
+      }).p;
+
+    it("«إنما الأعمال بالنيات» authentic، و«انما النيات بالاعمال» wording_differs (الخلل المسجَّل)", async () => {
+      const ok = (await viaCurated("إنما الأعمال بالنيات", "curated#A004")).claims[0];
+      expect(ok.verdict).toBe("authentic");
+      const swapped = (await viaCurated("انما النيات بالاعمال", "curated#A004")).claims[0];
+      expect(swapped.verdict).toBe("wording_differs");
+      expect(swapped.sources[0].grading_quote).toBeUndefined();
+      expect(swapped.sources[0].quoted_text).toContain("الْأَعْمَالُ");
+      expect(swapped.review_status).toBe("pending_review");
+    });
+
+    it("حذف «لا» من «لا يؤمن أحدكم…» ⟵ wording_differs ولا authentic، في مسارَي المنتقى والفهرس", async () => {
+      const del = "يؤمن أحدكم حتى يحب لأخيه ما يحب لنفسه";
+      expect((await viaCurated(del, "curated#A006")).claims[0].verdict).toBe("wording_differs");
+      expect((await viaCollection(del)).claims[0].verdict).not.toBe("authentic");
+      expect((await viaCurated("لا يؤمن أحدكم حتى يحب لأخيه ما يحب لنفسه", "curated#A006")).claims[0].verdict).toBe("authentic");
+    });
+
+    it("رد wording_differs: لفظ المصدر بموضعه وتنبيه، بلا وصف بالخطأ أو الكذب", async () => {
+      const r = await viaCurated("يؤمن أحدكم حتى يحب لأخيه ما يحب لنفسه", "curated#A006");
+      expect(r.reply_text).toContain("لفظ الحديث في «");
+      expect(r.reply_text).toContain("قد يكون هذا روايةً أخرى");
+      expect(r.reply_text).not.toMatch(/كاذب|مكذوب|باطل/);
+      VerifyResponseSchema.parse(r);
+    });
+
+    it("«انشرها تؤجر» في آخر الادعاء لا تُسقط المطابقة التامة (ضابط)", async () => {
+      const c = (await viaCurated("لا يؤمن أحدكم حتى يحب لأخيه ما يحب لنفسه انشرها تؤجر", "curated#A006")).claims[0];
+      expect(["authentic", "wording_differs"]).toContain(c.verdict);
+    });
   });
 
   it("القرآن: تحريف كلمة ⇒ quran_misquoted مع النص الصحيح من الملف دون استدعاء الحكم", async () => {

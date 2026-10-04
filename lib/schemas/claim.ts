@@ -15,6 +15,7 @@ export const VERDICTS = [
   "misattributed",
   "quran_verified",
   "quran_misquoted",
+  "wording_differs", // اللفظ يختلف عمّا في المصدر: يُعرض لفظ المصدر حرفياً دون وصف الادعاء بالخطأ (scoring-2026-10-04.2)
   "refer_to_scholar",
   "not_a_religious_claim",
 ] as const;
@@ -31,15 +32,19 @@ export const POSITIVE_VERDICTS: readonly Verdict[] = [
   "quran_verified",
   "quran_misquoted",
   "scholar_text_only",
+  "wording_differs", // مسنَد: يعرض لفظ المصدر بمصدره وموضعه (القاعدة 11: يُحتسب كـscholar_text_only)
 ];
 
 export const SourceRefSchema = z.object({
   source_id: z.string(),
   title: z.string(),
+  author: z.string().optional(), // اسم المؤلف للعرض (من الـ manifest)
   location: z.string(),
   quoted_text: z.string(), // حرفي من المصدر (يقتطعه الكود لا النموذج)
   grading_quote: z.string().optional(), // حكم الإمام بنصه
   attribution_note: z.string().optional(),
+  /** موضع بداية المتن (فهرس حرف في quoted_text) في الصحيحين: ما قبله إسناد يُطوى في الواجهة والنص الكامل يبقى */
+  matn_from: z.number().int().nonnegative().optional(),
   url: z.string().optional(), // صفحة المصدر (تراث للمدخلات الحية، الشاملة للمنتقى)
 });
 export type SourceRef = z.infer<typeof SourceRefSchema>;
@@ -77,7 +82,18 @@ export const VerifyResponseSchema = z.object({
   timings_ms: z.record(z.string(), z.number()),
   /** استهلاك التوكنز وتكلفة الرسالة (تقني؛ القاعدة 26) */
   usage: z.object({ input_tokens: z.number(), output_tokens: z.number(), cost_usd: z.number() }).optional(),
+  /** عناوين الكتب المذكورة في checked_sources (للعرض فقط) */
+  source_titles: z.record(z.string(), z.string()).optional(),
+  /** أثر نداءات النموذج (الخطوة والنموذج والزمن والنتيجة) لمعرفة مصدر أي تأخر؛ تقني بلا نص */
+  llm_trace: z
+    .array(
+      z.object({
+        label: z.string(),
+        attempts: z.array(z.object({ model: z.string(), ms: z.number(), outcome: z.enum(["ok", "timeout", "error", "invalid_output"]) })),
+      }),
+    )
+    .optional(),
   /** نسخة المعجم والبرومتات التي أنتجت هذا الرد (lib/versions.ts) */
-  versions: z.object({ lexicon: z.string(), prompts: z.string() }).optional(),
+  versions: z.object({ lexicon: z.string(), prompts: z.string(), scoring: z.string().optional() }).optional(),
 });
 export type VerifyResponse = z.infer<typeof VerifyResponseSchema>;

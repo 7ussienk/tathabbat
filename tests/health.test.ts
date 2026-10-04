@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { handleMachineHealth, handlePublicHealth, handleMachineVerify } from "../lib/api-guard";
 import { MemoryRateLimitStore } from "../lib/ratelimit/memory";
+import { EXPECTED_TOTAL } from "../lib/retrieval/expected";
 
 const ready = existsSync("data/index/text-index.json") && existsSync("data/index/store.json");
 const req = (path: string, init?: RequestInit) => new Request(`http://localhost${path}`, init);
@@ -42,7 +43,7 @@ describe("health (عام بلا تفاصيل، والتفاصيل بتوكن)", 
     const r = await handleMachineHealth(req("/api/machine/health?deep=1", { headers: { authorization: "Bearer test-token-123456" } }));
     const b = (await r.json()) as { ok: boolean; deep: { entries: number; probe_ok: boolean }; fetch_report: unknown; config: unknown };
     expect(r.status).toBe(200);
-    expect(b.deep.entries).toBe(1355);
+    expect(b.deep.entries).toBe(EXPECTED_TOTAL);
     expect(b.deep.probe_ok).toBe(true);
     expect(b.config).toBeDefined();
   });

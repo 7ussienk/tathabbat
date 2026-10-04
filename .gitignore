@@ -12,3 +12,5 @@ data/index/
 *.tsbuildinfo
 eval/audio/*
 !eval/audio/.gitkeep
+docs/screens/
+eval/results/

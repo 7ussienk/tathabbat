@@ -40,7 +40,7 @@
 8. **المصادر:** تُعتمد كتب علماء أهل السنة والجماعة من المذاهب الأربعة ودواوين السنة فقط، حسب `docs/SOURCES_POLICY.md`. لا تُنقل أحكام من مصادر معاصرة أو من خارج الـ manifest.
 9. **لا تختلق بيانات دينية.** لا تكتب نصوص أحاديث أو أحكاماً أو مصادر من ذاكرتك في ملفات البيانات. البيانات الدينية يوفرها صاحب المشروع فقط. إن احتجت بيانات للتطوير، استخدم بيانات وهمية واضحة (مثل `"TEST_HADITH_001"`) وليس نصوصاً تبدو حقيقية.
 10. **شرط `not_found_in_sources`:** لا يصدر هذا الامتناع إلا بعد البحث في **الفهرس المحلي كاملاً** (أفضل 10 نتائج بعد التطبيع العربي) و`data/curated` دون مرشح مقبول. وتكون صياغته: «لم نجد له أصلاً في المصادر المعتمدة التي فُحصت» مع **قائمة الكتب المفهرسة فعلاً** (`checked_sources`) وتصريح بأن الفهرس لا يغطي كل القائمة البيضاء. وإذا تعذّر تحميل الفهرس أو أحد كتبه وقت التشغيل فالحالة `search_unavailable` (و`failed_sources`) ولا يُقال «لم نجد» أبداً.
-11. **حساب الإسناد:** نسبة الإسناد (هدفها 100%) تُحسب على الأحكام الإيجابية فقط: `authentic, weak, fabricated, no_basis_per_scholar, disputed, misattributed, quran_verified, quran_misquoted`. وتُحتسب `scholar_text_only` مسندةً لأن مصدرها إلزامي (دون تصنيف آلي). تُستثنى `not_found_in_sources` و`search_unavailable` و`refer_to_scholar` و`not_a_religious_claim` (مصادرها قد تكون فارغة، وتُعرض بصياغتها الخاصة).
+11. **حساب الإسناد:** نسبة الإسناد (هدفها 100%) تُحسب على الأحكام الإيجابية فقط: `authentic, weak, fabricated, no_basis_per_scholar, disputed, misattributed, wording_differs, quran_verified, quran_misquoted` (و`wording_differs` مسنَدة لأن نص المصدر الحرفي وموضعه إلزاميان فيها). وتُحتسب `scholar_text_only` مسندةً لأن مصدرها إلزامي (دون تصنيف آلي). تُستثنى `not_found_in_sources` و`search_unavailable` و`refer_to_scholar` و`not_a_religious_claim` (مصادرها قد تكون فارغة، وتُعرض بصياغتها الخاصة).
 12. **حالة المراجعة:** كل مدخل `reviewed:false` (في curated أو manifest) يظهر حكمه في الواجهة والبوت بشارة «بانتظار مراجعة شرعية». يحمل `ClaimResult` الحقل `review_status`.
 13. **الثقة:** `confidence` تُحسب **برمجياً** من درجة الاسترجاع (الدمج الدلالي/النصي) ونتيجة التحقق من الاستشهاد؛ لا تُؤخذ من تقدير النموذج الذاتي، وتُقارن بـ `CONFIDENCE_THRESHOLD`.
 14. **الحالات الاصطناعية:** الحالات المصطنعة (`"synthetic": true` في `eval/dataset.jsonl`) للتقييم فقط؛ **لا تُستخدم في البيانات المنتقاة (`data/curated/`) ولا في الفهرسة ولا في العرض الحي أو الفيديو أو العرض التقديمي**. وأي ادعاء جديد مصطنع يُوسم بذلك.
@@ -115,6 +115,7 @@
 ```
 GEMINI_API_KEY=
 GEMINI_MODEL=
+GEMINI_FALLBACK_MODEL=   # يُعاد عليه الطلب فوراً عند تعثّر النموذج الأساسي (الافتراضي gemini-3.7-flash)
 GEMINI_FILE_SEARCH_STORE=
 VERIFY_API_TOKEN=        # n8n (اختياري) و/أو استدعاءات الخادم لـ /api/verify
 CONFIDENCE_THRESHOLD=0.75
@@ -158,6 +159,7 @@ type ClaimResult = {
     | "search_unavailable"      // انقطاع أو مهلة؛ لا يُقال «لم نجد» (القاعدة 24)
     | "scholar_text_only"       // نص الإمام منقولاً حرفياً بلا تصنيف آلي (لا لفظ في المعجم)
     | "disputed" | "misattributed"   // misattributed: قول ثابت لغير النبي ﷺ نُسب إليه
+    | "wording_differs"          // اللفظ المُدخَل قريب من مدخل في المصدر لكنه ليس مطابقاً بالترتيب (تبديل/حذف/استبدال/زيادة)؛ يُعرض لفظ المصدر حرفياً بلا حكم على الادعاء (قرار 105)
     | "quran_verified" | "quran_misquoted"
     | "refer_to_scholar" | "not_a_religious_claim";
   confidence: number;                 // 0..1
