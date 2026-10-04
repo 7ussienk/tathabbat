@@ -14,6 +14,9 @@ export type ExtractedClaim = ExtractOutput["claims"][number];
 
 const EXCERPT_MAX = 1200;
 
+/** «السخاوي (ت 902هـ)» ← «السخاوي» */
+export const displayAuthor = (a?: string) => a?.replace(/\s*\([^)]*\)\s*$/, "").trim() || undefined;
+
 export function turathUrl(store: Store, e: BookEntry): string | undefined {
   const tid = store.sourceMeta[e.source_id]?.turath_book_id;
   return tid ? `https://app.turath.io/book/${tid}?page=${e.page_id_start}` : undefined;
@@ -126,6 +129,7 @@ export function buildCurated(c: ExtractedClaim, idx: number, d: Extract<JudgeDec
     return {
       source_id: s.source_id,
       title: meta?.title ?? s.source_id,
+      author: displayAuthor(meta?.author),
       location: s.location,
       quoted_text: entry ? excerpt(entry.text, literal) : (s.quoted_text ?? s.grading_quote ?? ""),
       grading_quote: s.grading_quote,
@@ -168,6 +172,7 @@ export function buildLive(c: ExtractedClaim, idx: number, d: Extract<JudgeDecisi
   const src: SourceRef = {
     source_id: e.source_id,
     title: meta?.title ?? e.source_id,
+    author: displayAuthor(meta?.author),
     location: e.location,
     quoted_text: excerpt(e.text, literal),
     grading_quote: literal ?? undefined,

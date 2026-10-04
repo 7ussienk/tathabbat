@@ -76,6 +76,9 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       disclaimer: DISCLAIMER,
       timings_ms: timings,
       versions: { ...VERSIONS },
+      source_titles: Object.fromEntries(
+        [...new Set(partial.claims.flatMap((c) => c.checked_sources ?? []))].flatMap((id) => (store?.sourceMeta[id] ? [[id, store.sourceMeta[id].title]] : [])),
+      ),
       usage: { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, cost_usd: Math.round(cost * 1e6) / 1e6 },
       ...composed,
       ...partial,
