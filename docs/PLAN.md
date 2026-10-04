@@ -145,12 +145,13 @@ Dockerfile, docker-compose.yml, Caddyfile.example, LICENSE
 | النماذج | اسم من env | الأحدث المستقر `gemini-3.8-flash`؛ وFile Search يدعم 3.8/3.7/3.6/3.5 Flash وغيرها. نماذج 2.5 مقيّدة الوصول. **توصية:** `GEMINI_MODEL=gemini-3.8-flash` (التأكد في AI Studio) |
 | File Search | store + رفع + استعلام | `ai.fileSearchStores.create({config:{embeddingModel:'models/gemini-embedding-2'}})`، `uploadToFileSearchStore`/`importFile`، وأداة `{type:"file_search", file_search_store_names:[...]}`. الاستشهادات `file_citation` فيها `file_name/source/custom_metadata`. **لا يدعم الصوت/الفيديو.** حد الملف 100MB |
 | الدمج مع المخرجات المنظمة | غير مذكور | **مدعوم** في Gemini 3 (`response_format` بـ JSON schema) مع File Search وfunction calling |
-| المخرجات المنظمة | Zod | `response_format:{type:'text', mime_type:'application/json', schema}`؛ بعض ميزات JSON Schema غير مدعومة، فنتحقق بعدها بـ Zod |
+| المخرجات المنظمة | Zod | `response_format:{type:'text', mime_type:'application/json', schema}` وتعمل مع `z.toJSONSchema()` (بعد حذف `$schema`)، ونتحقق بعدها بـ Zod كذلك (89/89 في اختبار 4 أكتوبر) |
+| مستوى التفكير | غير مذكور | **`thinking_level:"minimal"` غير مدعوم في `gemini-3.8-flash` (400)**. المعتمد **`low`** (قرار 4 أكتوبر)؛ `medium` يكلّف 2.3 ضعف بلا مكسب، والافتراضي يصرف مئات التوكنز على رد قصير. ويُمرَّر `store:false` دائماً. انظر `docs/GEMINI_SPIKE.md` |
 | الصوت | غير محدد | OGG/Opus مدعوم (يناسب voice تيليجرام)؛ الجسم المضمّن ≤ 20MB؛ Files API للأكبر؛ ~32 توكن/ثانية |
-| الفوترة | غير مذكورة | (الفوترة ستُفعَّل — قرار 12) **File Search غير متاح في الطبقة المجانية**؛ تكلفة التضمين ≈ $0.15/مليون توكن؛ التخزين واستعلام التضمين مجانيان. `gemini-3.8-flash` ≈ $0.75 دخل / $3.75 خرج لكل مليون (حتى 31 ديسمبر 2026) |
+| الفوترة | غير مذكورة | (الفوترة ستُفعَّل — قرار 12) **File Search غير متاح في الطبقة المجانية**؛ تكلفة التضمين ≈ $0.15/مليون توكن؛ التخزين واستعلام التضمين مجانيان. `gemini-3.8-flash` ≈ $0.75 دخل / $3.75 خرج لكل مليون (حتى 31 ديسمبر 2026)، **ثم $1.50 / $7.50 من 1 يناير 2027**؛ والصوت المُدخَل $3.00 للمليون أو $0.005 للدقيقة (راجع `docs/GEMINI_SPIKE.md` للتكلفة) |
 | نموذج التفريغ | Gemini للتفريغ | يوجد أيضاً نموذج متخصص `Gemini 3.5 Transcribe`؛ نبدأ بـ Flash نفسه لبساطة المزود الواحد ونقارن إن ساء التفريغ العامي |
 
-> هذه الأرقام من صفحات التوثيق الرسمية وقت المراجعة؛ تُعاد معاينتها صباح 4 أكتوبر قبل كتابة الكود (R2 يعتمد عليها).
+> هذه الأرقام من صفحات التوثيق الرسمية وقت المراجعة؛ أُعيدت معاينتها وجُرِّبت فعلياً صباح 4 أكتوبر (`docs/GEMINI_SPIKE.md`)، والتصحيحات مُدرجة في الجدول أعلاه.
 
 ## 8. تعارضات ونقص في CLAUDE.md (تفصيل)
 انظر رسالة المراجعة في المحادثة؛ الأهم: Q1، Q2، Q3، وعدم تطابق أنواع manifest (`type`) وحقوله مع المخطط المذكور في القسم 3، وفراغ حقل `license` (قيمته «TODO…» تجتاز فحص «غير فارغ»).
