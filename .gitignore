@@ -13,3 +13,4 @@ data/index/
 eval/audio/*
 !eval/audio/.gitkeep
 docs/screens/
+eval/results/

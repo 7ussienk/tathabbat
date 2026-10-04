@@ -17,7 +17,8 @@
     "build-index": "tsx scripts/build-index.ts",
     "precheck": "tsx scripts/precheck.ts",
     "try-verify": "tsx scripts/try-verify.ts",
-    "screenshots": "tsx scripts/screenshots.ts"
+    "screenshots": "tsx scripts/screenshots.ts",
+    "eval": "tsx eval/run-eval.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",
