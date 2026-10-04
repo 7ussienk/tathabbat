@@ -243,9 +243,9 @@ try {
   }
   throw e;
 }
-if (!REPLAY) registry[fingerprint] = { at: new Date().toISOString(), commit: gitOut(["rev-parse", "--short", "HEAD"]).trim(), usd: Math.round(cached.stats.spentUsd * 1000) / 1000 };
-if (!REPLAY) writeFileSync(REGISTRY, JSON.stringify(registry, null, 1));
-logCost("اكتمل");
+if (!REPLAY && !VALIDATION) registry[fingerprint] = { at: new Date().toISOString(), commit: gitOut(["rev-parse", "--short", "HEAD"]).trim(), usd: Math.round(cached.stats.spentUsd * 1000) / 1000 };
+if (!REPLAY && !VALIDATION) writeFileSync(REGISTRY, JSON.stringify(registry, null, 1));
+if (!VALIDATION) logCost("اكتمل");
 console.log(`\nالمصروف فعلاً: ${cached.stats.spentUsd.toFixed(3)}$ | كاش: ${cached.stats.hits} إصابة / ${cached.stats.misses} نداء فعلي`);
 
 // ---------- التقرير ----------
@@ -254,7 +254,7 @@ const q = (xs: number[], p: number) => [...xs].sort((a, b) => a - b)[Math.min(xs
 const commit = (() => { try { return execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim(); } catch { return "?"; } })();
 const L: string[] = [];
 L.push("# تقرير التقييم", "");
-L.push(`> **غير نهائي**: مجموعة التحقق المستقلة لم تُوسَم/تُشغَّل بعد، فلا تُقرأ الأرقام أدناه دقةً نهائية للتسليم.`, "");
+L.push(`> **غير نهائي**: ${VALIDATION ? "تقرير مجموعة التحقق المستقلة: تشغيل واحد، ولا يُضبط عليها شيء." : "مجموعة التحقق المستقلة لم تُشغَّل بعد، فلا تُقرأ الأرقام أدناه دقةً نهائية للتسليم."}`, "");
 L.push(`- التاريخ: ${new Date().toISOString()} | commit: \`${commit}\` | المعجم: \`${LEXICON_VERSION}\` | البرومتات: \`${PROMPT_VERSION}\` | التسجيل: \`${SCORING_VERSION}\``);
 L.push(`- النموذج: \`${cfg.GEMINI_MODEL}\` (احتياطي \`${cfg.GEMINI_FALLBACK_MODEL}\`) | ${RUNS} تشغيلات، توازٍ ${CONC} | عتبة الثقة ${cfg.CONFIDENCE_THRESHOLD}`);
 L.push(`- الكتب المفهرسة: ${store.indexedSources.join("، ")} (+ ${store.curated.size} مدخل منتقى في نمط «مع curated»)`, "");
@@ -339,15 +339,24 @@ if (VALIDATION) {
       const res = await pool(vrows, CONC, async (r) => ({ r, out: await verifyMessage({ type: "text", text: r.input }, { llm: cached, route: "eval:validation", useCurated: false }) }));
       for (const { r, out } of res) {
         const c = out.claims[0];
-        vr.push({ mode: "nocurated", run, id: r.id, category: r.category, critical: false, synthetic: false, leakage: false, known: false, accept: r.expected[0].accept, verdict: c?.verdict ?? "(none)", ok: !!c && r.expected[0].accept.includes(c.verdict), abstain: false, outOfIndex: false, positive: !!c && POSITIVE_VERDICTS.includes(c.verdict), sourced: !!c && c.sources.length > 0, badSources: c ? auditSources(c) : 0, downgraded: false, conf: c?.confidence ?? null, ms: out.timings_ms.total ?? 0, tokensIn: 0, tokensOut: 0, cost: out.usage?.cost_usd ?? 0, fallback: 0, llmCalls: 0, llmFailed: 0, status: out.status, served: "-" });
+        vr.push({ mode: "nocurated", run, id: r.id, category: r.category, critical: false, synthetic: false, leakage: false, known: false, accept: r.expected[0].accept, verdict: c?.verdict ?? "(none)", ok: !!c && r.expected[0].accept.includes(c.verdict), abstain: false, outOfIndex: false, positive: !!c && POSITIVE_VERDICTS.includes(c.verdict), sourced: !!c && c.sources.length > 0, badSources: c ? auditSources(c) : 0, downgraded: false, conf: c?.confidence ?? null, ms: out.timings_ms.total ?? 0, tokensIn: 0, tokensOut: 0, cost: out.usage?.cost_usd ?? 0, fallback: 0, llmCalls: 0, llmFailed: 0, status: out.status, served: (out.served_models ?? []).join("+") || "-" });
       }
     }
     const runs = [...new Set(vr.map((r) => r.run))];
     L.push(`النسخ المجمَّدة: المعجم \`${LEXICON_VERSION}\`، البرومتات \`${PROMPT_VERSION}\`. ${vrows.length} حالة.`);
     L.push(`**الإصابة:** ${runs.map((n) => { const x = vr.filter((r) => r.run === n); return `${x.filter((r) => r.ok).length}/${x.length} (${pct(x.filter((r) => r.ok).length, x.length)})`; }).join(" / ")} | اختلاق مصدر: ${vr.reduce((a, r) => a + r.badSources, 0)}`, "");
-    L.push("| الحالة | المتوقع | الأحكام عبر التشغيلات |", "|---|---|---|");
-    for (const r of vrows) L.push(`| ${r.id} | ${r.expected[0].accept.join("/")} | ${vr.filter((x) => x.id === r.id).map((x) => x.verdict).join(" ، ")} |`);
+    L.push("| الحالة | المتوقع | الفعلي (التشغيلات) | النموذج الذي خدم |", "|---|---|---|---|");
+    for (const r of vrows) L.push(`| ${r.id} | ${r.expected[0].accept.join("/")} | ${vr.filter((x) => x.id === r.id).map((x) => x.verdict).join(" ، ")} | ${vr.filter((x) => x.id === r.id).map((x) => x.served).join(" ، ")} |`);
   }
+}
+if (VALIDATION) {
+  // مجموعة التحقق تُشغَّل بعد ملخص الميزانية أعلاه، فتُسجَّل تكلفتها هنا (بعد اكتمالها)
+  if (!REPLAY) {
+    registry[fingerprint] = { at: new Date().toISOString(), commit: gitOut(["rev-parse", "--short", "HEAD"]).trim(), usd: Math.round(cached.stats.spentUsd * 1000) / 1000 };
+    writeFileSync(REGISTRY, JSON.stringify(registry, null, 1));
+    logCost("اكتمل مع مجموعة التحقق");
+  }
+  console.log(`المصروف الكلي بعد مجموعة التحقق: ${cached.stats.spentUsd.toFixed(3)}$ | كاش: ${cached.stats.hits} إصابة / ${cached.stats.misses} نداء فعلي`);
 }
 writeFileSync(OUT, L.join("\n") + "\n");
 console.log(`\nكُتب ${OUT}`);

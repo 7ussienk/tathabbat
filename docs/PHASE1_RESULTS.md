@@ -183,3 +183,25 @@
 **الخطأ 400 من 3.7** (`Request contains an invalid argument`، حالتان من نحو 240 نداء حكم، كلتاهما بعد انتهاء مهلة 3.8): السجل لم يحفظ جسم الخطأ (100 حرف من الرسالة فقط). فُحصت مدخلاتا الحالتين المشتبه بهما (`WA007-add`، `WA009-add`، من قائمة الفاشلة): صحيحة البنية (`isWellFormed`، بلا محارف تحكم، 6.5 و11.2 ألف حرف)، وأُعيد إرسال نداءي الحكم لـ3.7 مباشرة (نداءان، 0.0078$) فنجحا. **الاستنتاج:** الخطأ عابر من جهة الخدمة وغير مرتبط بالمدخل، ولا يمكن استبعاد تكراره مع مدخلات حقيقية بنسبة نحو 1% من نداءات الاحتياطي أثناء تعثّر الأساسي. المعالجة: صار يُسجَّل جسم الخطأ حتى 300 حرف، وفي وضع القاطع المفتوح يُجرَّب الأساسي ملاذاً أخيراً حين يفشل 3.7 (بما فيه 400).
 
 **المسار الآلي بالتوكن:** `VERIFY_API_TOKEN` في متغيرات البيئة فقط (64 حرفاً)؛ فُحص السجل كاملاً (35 commit، كل المراجع): قيمته في **0** منها، و`.env` مستثنى، والاختبارات تستخدم قيمة وهمية. صار له سقف تكلفة يومي تقديري `MACHINE_COST_DAILY_CAP_USD=3` (العام 1.5) ويشمله `VERIFY_DISABLED`.
+
+## المجموعة المستقلة (26 حالة): تشغيل واحد على النسخة المدمجة (4 أكتوبر 2026، commit `2309eb6`)
+**الإصدارات الفعلية:** المعجم `lexicon-2026-10-04.3` | البرومتات `prompts-2026-10-04.5` | التسجيل `scoring-2026-10-04.3`. وضع بدون curated، تشغيل واحد، ادعاءات «كما سيُرسَل» حرفياً من `private/validation_candidates.md`، وتوسيم صاحب المشروع كما هو. **كل الحالات الـ26 خدمها `gemini-3.7-flash`** (3.8 متعثّر). المصروف ≈ **0.100$** (سُجّل في `COST_LOG.md`). لم يُعدَّل المعجم ولا البرومت ولا التسجيل بسببها.
+
+**الإصابة: 12/26 (46.2%)، اختلاق مصدر 0.** (المتوقع ⟵ الفعلي؛ ✓ إصابة)
+| الحالة | المتوقع | الفعلي | | الحالة | المتوقع | الفعلي |
+|---|---|---|---|---|---|---|
+| V001 | scholar_text_only | authentic | | V014 | no_basis | scholar_text_only |
+| V002 | scholar_text_only | not_a_religious_claim | | V015 | scholar_text_only | not_a_religious_claim |
+| V003 ✓ | scholar_text_only | scholar_text_only | | V016 | no_basis | not_a_religious_claim |
+| V004 ✓ | scholar_text_only | scholar_text_only | | V017 | fabricated | not_a_religious_claim |
+| V005 | scholar_text_only | not_found_in_sources | | V018 ✓ | scholar_text_only | scholar_text_only |
+| V006 ✓ | scholar_text_only | scholar_text_only | | V019 | scholar_text_only | authentic |
+| V007 ✓ | weak | weak | | V020 ✓ | scholar_text_only | scholar_text_only |
+| V008 | no_basis | scholar_text_only | | V021 | misattributed | scholar_text_only |
+| V009 ✓ | scholar_text_only | scholar_text_only | | V022 ✓ | fabricated | fabricated |
+| V010 | no_basis | scholar_text_only | | V023 ✓ | scholar_text_only | scholar_text_only |
+| V011 ✓ | scholar_text_only | scholar_text_only | | V024 | no_basis | scholar_text_only |
+| V012 ✓ | scholar_text_only | scholar_text_only | | V025 ✓ | scholar_text_only | scholar_text_only |
+| V013 | fabricated أو no_basis | scholar_text_only | | V026 | no_basis | scholar_text_only |
+
+**أنماط الـ14 غير المصابة (قراءة فقط، بلا تعديل):** (1) 7 حالات متوقعها حكم مصنَّف والفعلي `scholar_text_only` (V008 وV010 وV013 وV014 وV021 وV024 وV026): المعجم لم يصنّف جملة الإمام؛ (2) 4 حالات `not_a_religious_claim` (V002 وV015 وV016 وV017): المستخرِج رآها دعاءً أو مثلاً لا ادعاءً دينياً؛ (3) حالتان `authentic` (V001 وV019): لفظ الادعاء مطابق لمتن في الصحيحين المفهرسين، بينما وسمها صاحب المشروع على مدخل «المقاصد» وحده؛ (4) V005 امتناع `not_found_in_sources`. وهذا قياس أولي بتشغيل واحد وعلى 3.7 لا 3.8، لا دقة نهائية.
