@@ -17,7 +17,14 @@ import { getStore, type Store } from "@/lib/retrieval/store";
 import type { ClaimResult, VerifyResponse } from "@/lib/schemas/claim";
 
 export type VerifyInput = { type: "text"; text: string };
-export type VerifyDeps = { llm?: LLMProvider | null; getStore?: () => Promise<Store>; config?: Config; route?: string };
+export type VerifyDeps = {
+  llm?: LLMProvider | null;
+  getStore?: () => Promise<Store>;
+  config?: Config;
+  route?: string;
+  /** false ⇒ تجاهل data/curated (قياس «بدون المنتقى» في التقييم: القرار 51). الافتراضي true. */
+  useCurated?: boolean;
+};
 
 export const MAX_TEXT_CHARS = 4000;
 
@@ -151,7 +158,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
 
     if (!store) return buildSearchUnavailable(c, idx, ["text-index"]);
 
-    const retrieved = retrieve(store, c.claim_text);
+    const retrieved = retrieve(store, c.claim_text, undefined, { curated: deps.useCurated });
     const d = await judgeClaim(llm!, c.claim_text, retrieved, config.CONFIDENCE_THRESHOLD);
     usage = add(usage, d.usage);
     const retrievedIds = new Set(retrieved.candidates.map((x) => x.id));

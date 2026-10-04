@@ -24,8 +24,9 @@ export function curatedBookKeys(c: CuratedEntry): string[] {
  * الخطوة 4: بحث في الفهرس المحلي (تطبيع عربي، أفضل 10 نتائج)؛ مداخل `data/curated` (أحكام بشرية) تسبق.
  * لا شبكة. المدخل الحي الذي استند إليه مدخل منتقى ظاهر في النتائج يُستبعد حتى لا يُحكم عليه حياً.
  */
-export function retrieve(store: Store, claimText: string, k = TOP_K): RetrieveResult {
-  const hits = search(store.index, claimText, k + 4);
+export function retrieve(store: Store, claimText: string, k = TOP_K, opts: { curated?: boolean } = {}): RetrieveResult {
+  const useCurated = opts.curated !== false;
+  const hits = search(store.index, claimText, k + 4, useCurated ? undefined : (r) => r.kind === "book");
   const topScore = hits[0]?.score ?? 0;
   const curatedHits = hits.filter((h) => h.kind === "curated");
   const covered = new Set<string>();

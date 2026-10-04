@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { getConfig } from "@/lib/config";
+import { deepHealth, detailedHealth } from "@/lib/health";
 import { sharedMemoryStore } from "@/lib/ratelimit/memory";
 import type { RateLimitStore } from "@/lib/ratelimit/store";
 import { MAX_TEXT_CHARS, verifyMessage } from "@/lib/verify-message";
@@ -51,7 +52,7 @@ export async function handlePublicVerify(req: Request, store: RateLimitStore = s
 }
 
 /** المسار الآلي للتقييم: يتطلب Authorization: Bearer VERIFY_API_TOKEN، بلا تحديد معدل. */
-export async function handleMachineVerify(req: Request): Promise<Response> {
+function checkToken(req: Request): Response | null {
   const token = getConfig().VERIFY_API_TOKEN;
   const given = /^Bearer (.+)$/.exec(req.headers.get("authorization") ?? "")?.[1] ?? "";
   const a = Buffer.from(given);
@@ -59,8 +60,33 @@ export async function handleMachineVerify(req: Request): Promise<Response> {
   if (!token || a.length !== b.length || !timingSafeEqual(a, b)) {
     return err(401, "unauthorized", "غير مصرّح.", "أرسل ترويسة Authorization صحيحة.");
   }
+  return null;
+}
+
+export async function handleMachineVerify(req: Request): Promise<Response> {
+  const denied = checkToken(req);
+  if (denied) return denied;
   const t = await readText(req);
   if (t instanceof Response) return t;
   const result = await verifyMessage({ type: "text", text: t.text }, { route: "/api/machine/verify" });
   return Response.json(result, { status: httpStatus(result) });
+}
+
+/** /api/health العام: {"ok":true} بلا تفاصيل. ?deep=1 يحمّل الفهرس فيخضع لتحديد المعدل ويعيد {"ok":bool} فقط. */
+export async function handlePublicHealth(req: Request, store: RateLimitStore = sharedMemoryStore()): Promise<Response> {
+  if (new URL(req.url).searchParams.get("deep") !== "1") return Response.json({ ok: true });
+  const cfg = getConfig();
+  if ((await store.hit(`health:${clientIp(req)}`, MINUTE)) > cfg.RATE_LIMIT_PER_MIN) {
+    return err(429, "rate_limited", "طلبات فحص كثيرة.", "انتظر دقيقة ثم أعد المحاولة.");
+  }
+  const d = await deepHealth();
+  return Response.json({ ok: d.ok }, { status: d.ok ? 200 : 503 });
+}
+
+/** /api/machine/health: كل التفاصيل (بتوكن). */
+export async function handleMachineHealth(req: Request): Promise<Response> {
+  const denied = checkToken(req);
+  if (denied) return denied;
+  const body = await detailedHealth(new URL(req.url).searchParams.get("deep") === "1");
+  return Response.json(body, { status: body.ok ? 200 : 503 });
 }
