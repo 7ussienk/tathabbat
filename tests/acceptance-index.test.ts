@@ -26,10 +26,44 @@ describe.skipIf(!ready)("اختبار القبول للفهرس المحلي", (
       .filter((n): n is string => !!n)
       .map((n) => `maqasid-sakhawi#${n}`);
 
+  const of = (id: string) => store.entries.filter((e) => e.source_id === id);
+
   it("المقاصد: 1355 مدخلاً وآخر رقم 1356 ولا قطع بحد الصفحات", () => {
-    expect(store.entries).toHaveLength(1355);
-    expect(store.entries.at(-1)!.number).toBe(1356);
-    expect(store.entries.some((e) => e.truncated)).toBe(false);
+    const m = of("maqasid-sakhawi");
+    expect(m).toHaveLength(1355);
+    expect(m.at(-1)!.number).toBe(1356);
+    expect(m.some((e) => e.truncated)).toBe(false);
+  });
+
+  it("الصحيحان: البخاري 7125 مدخلاً (ترقيم البغا 1..7124) ومسلم 3167 مدخلاً بالأرقام الحقيقية ≤ 3033", () => {
+    const b = of("sahih-bukhari");
+    const m = of("sahih-muslim");
+    expect(b).toHaveLength(7125);
+    expect(m).toHaveLength(3167);
+    expect(Math.max(...b.map((e) => e.number))).toBe(7124);
+    expect(Math.max(...m.map((e) => e.number))).toBe(3033);
+    // متن فقط: لا حواشي ولا عناوين أبواب ولا أسطر إحالة المحقق
+    expect([...b, ...m].filter((e) => /<hr>|<span||^\[[^\]]+\]\.?$/m.test(e.text))).toEqual([]);
+  });
+
+  it("مراسي الصحيحين: مداخل curated الصحيحة A001–A012 موجودة بأرقامها وصفحة بدايتها ونصها الحرفي داخل المدخل", () => {
+    const bad: string[] = [];
+    let n = 0;
+    for (const c of store.curated) {
+      for (const s of c.sources) {
+        if (!/^sahih-/.test(s.source_id)) continue;
+        n++;
+        const num = /رقم (\d+)/.exec(s.location)?.[1];
+        const e = byId.get(`${s.source_id}#${num}`);
+        if (!e) bad.push(`${c.id}: لا مدخل`);
+        else {
+          if (e.location.split(" ")[0].split("-")[0] !== s.location.split(" ")[0].split("-")[0] && !e.location.startsWith(s.location.split(" ")[0])) bad.push(`${c.id}: الموضع ${e.location} ≠ ${s.location}`);
+          if (s.quoted_text && !containsNormalized(e.text, s.quoted_text)) bad.push(`${c.id}: النص ∉ المدخل`);
+        }
+      }
+    }
+    expect(n).toBe(12);
+    expect(bad).toEqual([]);
   });
 
   it("W001 وW002 وW004 وW005 تُسترجع من مداخل المقاصد ضمن أفضل 10", () => {

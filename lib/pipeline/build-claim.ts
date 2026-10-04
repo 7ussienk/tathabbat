@@ -1,8 +1,9 @@
-import { extractLiteral } from "@/lib/arabic/normalize";
+import { extractLiteral, normalizeArabic, tokenize } from "@/lib/arabic/normalize";
+import { AUTHENTIC_COVERAGE_MIN } from "@/lib/pipeline/collections";
 import { containmentOverlap } from "@/lib/pipeline/retrieve";
 import { headOf } from "@/lib/retrieval/text-index";
 import { decideVerdict, type LexClass } from "@/lib/pipeline/verdict-lexicon";
-import type { JudgeDecision } from "@/lib/pipeline/judge";
+import type { CollectionHit, JudgeDecision } from "@/lib/pipeline/judge";
 import { QURAN_SOURCE_ID, skeletonWords, type QuranMatch } from "@/lib/quran/quran";
 import type { BookEntry } from "@/lib/retrieval/chunk-maqasid";
 import type { Store } from "@/lib/retrieval/store";
@@ -189,4 +190,75 @@ export function buildLive(c: ExtractedClaim, idx: number, d: Extract<JudgeDecisi
     review_status: meta?.reviewed ? "reviewed" : "pending_review",
     lexicon_review_terms: reviewTerms.length ? reviewTerms : undefined,
   };
+}
+
+/** نافذة متصلة (≤ max حرفاً) من نص المدخل حرفياً تضم أكثر كلمات الادعاء؛ لا دمج مقاطع منفصلة. */
+export function bestWindow(text: string, claim: string, max = EXCERPT_MAX): string {
+  if (text.length <= max) return text;
+  const want = new Set(tokenize(normalizeArabic(claim)));
+  const words: { start: number; end: number; hit: boolean }[] = [];
+  for (const m of text.matchAll(/\S+/g)) {
+    const t = tokenize(normalizeArabic(m[0]));
+    words.push({ start: m.index!, end: m.index! + m[0].length, hit: t.some((x) => want.has(x)) });
+  }
+  let best = { i: 0, j: 0, score: -1 };
+  let j = 0;
+  let score = 0;
+  for (let i = 0; i < words.length; i++) {
+    while (j < words.length && words[j].end - words[i].start <= max) {
+      if (words[j].hit) score++;
+      j++;
+    }
+    if (score > best.score) best = { i, j, score };
+    if (words[i].hit) score--;
+  }
+  const a = words[best.i]?.start ?? 0;
+  const b = words[Math.max(best.i, best.j - 1)]?.end ?? Math.min(text.length, max);
+  return text.slice(a, b);
+}
+
+function collectionSource(c: ExtractedClaim, store: Store, hit: CollectionHit): SourceRef {
+  const e = hit.candidate.entry;
+  const meta = store.sourceMeta[e.source_id];
+  const pct = Math.round(hit.coverage * 100);
+  const ok = hit.coverage >= AUTHENTIC_COVERAGE_MIN;
+  return {
+    source_id: e.source_id,
+    title: meta?.title ?? e.source_id,
+    author: displayAuthor(meta?.author),
+    location: e.location,
+    quoted_text: bestWindow(e.text, c.claim_text),
+    attribution_note: ok
+      ? `وردت هذه الرواية في «${meta?.title ?? e.source_id}» بالموضع المذكور، وألفاظ ادعائك مغطّاة فيها بنسبة ${pct}٪. والحكم هنا مبني على وجودها فيه لا على اجتهاد الأداة.`
+      : `ورد في «${meta?.title ?? e.source_id}» حديث قريب من ادعائك، لكن ألفاظه لا تغطّي ادعاءك كاملاً (التغطية ${pct}٪) فلا نحكم على النص كما ورد في رسالتك.`,
+    url: turathUrl(store, e),
+  };
+}
+
+/** الصحيحان: `authentic` فقط عند تغطية ≥ 0.85 من كلمات الادعاء داخل المدخل، وإلا scholar_text_only (نص الكتاب بلا تصنيف). */
+export function buildCollection(c: ExtractedClaim, idx: number, d: Extract<JudgeDecision, { kind: "collection" }>, store: Store): ClaimResult {
+  const meta = store.sourceMeta[d.hit.candidate.entry.source_id];
+  return {
+    ...base(c, idx),
+    verdict: d.hit.coverage >= AUTHENTIC_COVERAGE_MIN ? "authentic" : "scholar_text_only",
+    confidence: d.confidence,
+    sources: [collectionSource(c, store, d.hit)],
+    checked_sources: checkedSources(store),
+    failed_sources: [],
+    review_status: meta?.reviewed ? "reviewed" : "pending_review",
+  };
+}
+
+/**
+ * مدخل حي من كتب الأحكام مع مدخل من الصحيحين للحديث نفسه بتغطية كافية: إن لم يحمل كلام العالم حكماً مصنَّفاً فالصحيحان
+ * يثبتان `authentic`؛ وإن حمل حكماً سلبياً (موضوع/لا أصل له/ضعيف…) فتعارض المصدرين ⟵ `disputed` بعرضهما معاً.
+ */
+export function mergeCollection(live: ClaimResult, c: ExtractedClaim, idx: number, hit: CollectionHit, store: Store): ClaimResult {
+  if (hit.coverage < AUTHENTIC_COVERAGE_MIN) return live;
+  const src = collectionSource(c, store, hit);
+  if (live.verdict === "scholar_text_only") {
+    const meta = store.sourceMeta[hit.candidate.entry.source_id];
+    return { ...live, verdict: "authentic", confidence: Math.max(live.confidence, hit.confidence), sources: [src], review_status: meta?.reviewed ? "reviewed" : "pending_review" };
+  }
+  return { ...live, verdict: "disputed", sources: [...live.sources, src], id: `c${idx + 1}` };
 }

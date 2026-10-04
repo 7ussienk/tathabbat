@@ -7,7 +7,7 @@ import { GeminiProvider } from "@/lib/llm/gemini";
 import { LLMError, type CallMeta, type LLMProvider, type LLMUsage } from "@/lib/llm/provider";
 import { logRequest } from "@/lib/log";
 import { VERSIONS } from "@/lib/versions";
-import { buildCurated, buildLive, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
+import { buildCollection, buildCurated, buildLive, mergeCollection, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
 import { composeReply, DISCLAIMER } from "@/lib/pipeline/compose-reply";
 import { extractClaims } from "@/lib/pipeline/extract-claims";
 import { judgeClaim } from "@/lib/pipeline/judge";
@@ -191,7 +191,11 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
     let r: ClaimResult;
     if (d.kind === "none") r = buildNotFound(c, idx, store, d.reason, d.confidence);
     else if (d.kind === "curated") r = validateClaim(buildCurated(c, idx, d, store), { store, retrievedIds, curatedId: d.candidate.id });
-    else r = validateClaim(buildLive(c, idx, d, store), { store, retrievedIds });
+    else if (d.kind === "collection") r = validateClaim(buildCollection(c, idx, d, store), { store, retrievedIds });
+    else {
+      const live = buildLive(c, idx, d, store);
+      r = validateClaim(d.collection ? mergeCollection(live, c, idx, d.collection, store) : live, { store, retrievedIds });
+    }
 
     if (r.verdict === "not_found_in_sources" && c.claim_type === "quran") {
       r = { ...r, checked_sources: [QURAN_SOURCE_ID, ...(r.checked_sources ?? [])] };

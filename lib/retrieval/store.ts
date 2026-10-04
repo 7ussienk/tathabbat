@@ -10,7 +10,7 @@ import type { BookEntry } from "@/lib/retrieval/chunk-maqasid";
 import { loadIndex, type IndexDoc } from "@/lib/retrieval/text-index";
 import type { CuratedEntry } from "@/lib/schemas/curated";
 
-export type SourceMeta = { title: string; author?: string; turath_book_id?: number; reviewed: boolean };
+export type SourceMeta = { title: string; author?: string; turath_book_id?: number; reviewed: boolean; type?: string };
 
 export type Store = {
   index: MiniSearch<IndexDoc>;

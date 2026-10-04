@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { EXPECTED_ENTRIES } from "@/lib/retrieval/expected";
 import { getStore } from "@/lib/retrieval/store";
 import { search } from "@/lib/retrieval/text-index";
 
@@ -20,12 +21,17 @@ export async function deepHealth(): Promise<DeepHealth> {
     const store = await getStore();
     const probe = search(store.index, "اطلبوا العلم ولو بالصين", 3);
     const probe_ok = probe.some((h) => h.id === "maqasid-sakhawi#125");
-    const ok = probe_ok && store.entries.size === 1355;
+    const counts: Record<string, number> = {};
+    for (const e of store.entries.values()) counts[e.source_id] = (counts[e.source_id] ?? 0) + 1;
+    const countsOk = Object.entries(EXPECTED_ENTRIES).every(([id, n]) => counts[id] === n);
+    const ok = probe_ok && countsOk;
     return {
       ok,
       deep: {
         loaded_ms: Date.now() - t0,
         entries: store.entries.size,
+        entries_by_source: counts,
+        counts_ok: countsOk,
         curated: store.curated.size,
         indexed_sources: store.indexedSources,
         probe_top: probe[0]?.id ?? null,
