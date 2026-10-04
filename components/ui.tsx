@@ -83,6 +83,7 @@ const VERDICT_ICON: Record<Verdict, IconName> = {
   scholar_text_only: "info",
   wording_differs: "alert",
   refer_to_scholar: "info",
+  not_checked: "minus",
 };
 
 export function VerdictBadge({ verdict }: { verdict: Verdict }) {

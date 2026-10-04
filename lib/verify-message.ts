@@ -9,9 +9,9 @@ import { logRequest } from "@/lib/log";
 import { VERSIONS } from "@/lib/versions";
 import { checkCurated, checkEntry, exactCollection, fallbackNear, nearestEntry } from "@/lib/pipeline/ordered-check";
 import type { CollectionHit } from "@/lib/pipeline/judge";
-import { buildCollection, buildCurated, buildLive, buildWordingFallback, buildWordingFromCurated, buildWordingFromEntry, mergeCollection, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
+import { buildCollection, buildCurated, buildLive, buildWordingFallback, buildWordingFromCurated, buildWordingFromEntry, mergeCollection, buildNotChecked, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
 import { composeReply, DISCLAIMER } from "@/lib/pipeline/compose-reply";
-import { extractClaims } from "@/lib/pipeline/extract-claims";
+import { MAX_CLAIMS, extractClaims } from "@/lib/pipeline/extract-claims";
 import { judgeClaim } from "@/lib/pipeline/judge";
 import { retrieve } from "@/lib/pipeline/retrieve";
 import { validateClaim } from "@/lib/pipeline/validate";
@@ -36,6 +36,11 @@ const ERRORS = {
     code: "llm_unavailable",
     message_ar: "تعذّر الاتصال بخدمة الذكاء الاصطناعي الآن، فلم نستطع تحليل الرسالة.",
     next_step_ar: "حاول بعد دقائق، أو تحقق بنفسك عبر رابط البحث الخارجي.",
+  },
+  claims_limit: {
+    code: "claims_limit",
+    message_ar: `فحصنا أول ${MAX_CLAIMS} ادعاءات فقط من رسالتك.`,
+    next_step_ar: "أعد إرسال الباقي في رسالة منفصلة لنفحصه.",
   },
   invalid_input: {
     code: "invalid_input",
@@ -77,7 +82,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
   const finish = (partial: Omit<VerifyResponse, "request_id" | "input_type" | "disclaimer" | "timings_ms" | "usage" | "reply_text" | "telegram_text"> & { reply_text?: string; telegram_text?: string }, store: Store | null): VerifyResponse => {
     timings.total = Date.now() - t0;
     const composed = partial.claims.length
-      ? composeReply(partial.claims, store)
+      ? composeReply(partial.claims, store, partial.claims_total !== undefined ? { total: partial.claims_total, examined: partial.claims_examined ?? partial.claims_total } : undefined)
       : { reply_text: partial.error?.message_ar ?? "", telegram_text: partial.error?.message_ar ?? "" };
     const cost = (usage.input_tokens * config.PRICE_IN_PER_M + usage.output_tokens * config.PRICE_OUT_PER_M) / 1e6;
     const res: VerifyResponse = {
@@ -137,10 +142,12 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
 
   // 2+3) استخراج الادعاءات وتصنيفها
   let extracted: ExtractedClaim[];
+  let extractedTotal = 0;
   const te = Date.now();
   try {
     const r = await withDeadline(extractClaims(llm, text), deadline - Date.now());
     extracted = r.claims;
+    extractedTotal = r.total;
     usage = add(usage, r.usage);
     if (r.meta) trace.push(r.meta);
   } catch (e) {
@@ -158,8 +165,10 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
   // 4–6) لكل ادعاء: استرجاع ← حكم ← تحقق (بالتوازي)
   const tc = Date.now();
   let llmFailures = 0;
+  const toCheck = extracted.slice(0, MAX_CLAIMS);
+  const overflow = extracted.slice(MAX_CLAIMS);
   const results = await Promise.all(
-    extracted.map(async (c, idx): Promise<ClaimResult | null> => {
+    toCheck.map(async (c, idx): Promise<ClaimResult | null> => {
       try {
         return await withDeadline(processClaim(c, idx), deadline - Date.now());
       } catch (e) {
@@ -242,9 +251,16 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
     return r;
   }
 
-  const claims = results.filter((x): x is ClaimResult => x !== null);
-  if (claims.length === 0) return finish({ claims: [], status: "error", error: ERRORS.llm_unavailable }, store);
-  if (llmFailures > 0) return finish({ claims, status: "partial", error: ERRORS.llm_unavailable }, store);
+  const examinedClaims = results.filter((x): x is ClaimResult => x !== null);
+  if (examinedClaims.length === 0) return finish({ claims: [], status: "error", error: ERRORS.llm_unavailable }, store);
+  // لا يُحذف ادعاء بصمت: ما فشل نداؤه أو انتهت مهلته أو تجاوز عدد الادعاءات المفحوصة يُعرض بحكم not_checked بنصّه
+  const claims: ClaimResult[] = [
+    ...results.map((x, i) => x ?? buildNotChecked(toCheck[i], i, "deadline_or_llm_failed")),
+    ...overflow.map((c, i) => buildNotChecked(c, toCheck.length + i, "over_limit")),
+  ];
+  const counts = { claims_total: Math.max(extractedTotal, claims.length), claims_examined: examinedClaims.length };
+  if (llmFailures > 0) return finish({ claims, status: "partial", error: ERRORS.llm_unavailable, ...counts }, store);
+  if (counts.claims_total > counts.claims_examined) return finish({ claims, status: "partial", error: ERRORS.claims_limit, ...counts }, store);
   if (claims.some((c) => c.verdict === "search_unavailable")) {
     return finish(
       { claims, status: "partial", error: { code: "search_unavailable", message_ar: "تعذّر تحميل فهرس المصادر المحلي.", next_step_ar: "حاول بعد قليل." } },

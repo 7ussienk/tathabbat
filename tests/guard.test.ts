@@ -118,12 +118,13 @@ describe("حدّا النص والادعاءات", () => {
     expect((await body(r)).error.code).toBe("invalid_input");
   });
 
-  it("المستخرِج لا يعيد أكثر من 6 ادعاءات", async () => {
+  it("المستخرِج يعيد كل الادعاءات (حتى 20) مع العدد الكلي، والتحديد على 6 عند الفحص (tests/not-checked.test.ts)", async () => {
     const text = Array.from({ length: 8 }, (_, i) => `ادعاء${i} مختلف`).join("\n");
     const llm = new MockProvider({
       extract: () => ({ claims: Array.from({ length: 8 }, (_, i) => ({ claim_text: `ادعاء${i} مختلف`, claim_type: "hadith", content_level: "A", understood_as: "x" })) }),
     });
-    expect((await extractClaims(llm, text)).claims).toHaveLength(6);
+    const r = await extractClaims(llm, text);
+    expect([r.claims.length, r.total]).toEqual([8, 8]);
   });
 });
 

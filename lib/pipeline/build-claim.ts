@@ -68,6 +68,14 @@ export function buildNotFound(c: ExtractedClaim, idx: number, store: Store, reas
   };
 }
 
+/**
+ * ادعاء لم يُفحص: انتهت مهلة المعالجة الكلية أو فشل نداء النموذج أو تجاوزت الرسالة عدد الادعاءات المفحوصة (قرار 4 أكتوبر مساءً).
+ * يُعرض نصّه صراحة ولا يُحذف بصمت؛ لا حكم ولا مصدر ولا شرح مولَّد.
+ */
+export function buildNotChecked(c: ExtractedClaim, idx: number, reason: "deadline_or_llm_failed" | "over_limit"): ClaimResult {
+  return { ...base(c, idx), verdict: "not_checked", confidence: 0, sources: [], checked_sources: [], failed_sources: [], review_status: "reviewed", downgrade_reason: reason };
+}
+
 export function buildSearchUnavailable(c: ExtractedClaim, idx: number, failed: string[]): ClaimResult {
   return {
     ...base(c, idx),

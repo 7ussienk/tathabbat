@@ -16,4 +16,5 @@ export const VERDICT_LABELS: Record<Verdict, { label: string; tone: "ok" | "warn
   wording_differs: { label: "اللفظ يختلف عمّا في المصدر", tone: "warn" },
   refer_to_scholar: { label: "هذا يحتاج سؤال عالم أو جهة إفتاء رسمية", tone: "info" },
   not_a_religious_claim: { label: "لا يوجد ادعاء ديني للتحقق منه", tone: "neutral" },
+  not_checked: { label: "لم نفحص هذا الادعاء (انتهى الوقت)", tone: "neutral" },
 };

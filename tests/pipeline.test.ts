@@ -252,7 +252,8 @@ describe.skipIf(!ready)("verifyMessage (مزوّد وهمي + الفهرس ال�
     expect(n).toBe(1);
     expect(r.status).toBe("partial");
     expect(r.error?.code).toBe("llm_unavailable");
-    expect(r.claims.map((c) => c.verdict)).toEqual(["refer_to_scholar"]);
+    // الادعاء الذي فشل حكمه لا يُحذف بصمت: يظهر بحكم not_checked (قرار 109)
+    expect(r.claims.map((c) => c.verdict)).toEqual(["refer_to_scholar", "not_checked"]);
   });
 
   it("تعذّر تحميل الفهرس ⇒ search_unavailable لا «لم نجد»", async () => {
