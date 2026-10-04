@@ -34,6 +34,8 @@
   --color-danger: var(--danger);
   --color-info: var(--info);
   --font-sans: var(--font-readex), system-ui, sans-serif;
+  --font-quote: var(--font-amiri), "Amiri", serif;
+  --font-quran: var(--font-amiri-quran), "Amiri Quran", var(--font-amiri), serif;
 }
 
 html {

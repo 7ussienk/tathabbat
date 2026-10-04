@@ -36,6 +36,7 @@ export const POSITIVE_VERDICTS: readonly Verdict[] = [
 export const SourceRefSchema = z.object({
   source_id: z.string(),
   title: z.string(),
+  author: z.string().optional(), // اسم المؤلف للعرض (من الـ manifest)
   location: z.string(),
   quoted_text: z.string(), // حرفي من المصدر (يقتطعه الكود لا النموذج)
   grading_quote: z.string().optional(), // حكم الإمام بنصه
@@ -77,6 +78,8 @@ export const VerifyResponseSchema = z.object({
   timings_ms: z.record(z.string(), z.number()),
   /** استهلاك التوكنز وتكلفة الرسالة (تقني؛ القاعدة 26) */
   usage: z.object({ input_tokens: z.number(), output_tokens: z.number(), cost_usd: z.number() }).optional(),
+  /** عناوين الكتب المذكورة في checked_sources (للعرض فقط) */
+  source_titles: z.record(z.string(), z.string()).optional(),
   /** نسخة المعجم والبرومتات التي أنتجت هذا الرد (lib/versions.ts) */
   versions: z.object({ lexicon: z.string(), prompts: z.string() }).optional(),
 });
