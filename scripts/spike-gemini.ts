@@ -208,12 +208,14 @@ async function testC() {
     writeFileSync(wavPath, wavFromPcm(Buffer.from(b64, "base64")));
     console.log(`[C] وُلِّد صوت اصطناعي (${Date.now() - t0}ms) — هذا اختبار أنابيب لا لهجة حقيقية`);
   } else {
-    mime = wavPath.endsWith(".ogg") ? "audio/ogg" : wavPath.endsWith(".mp3") ? "audio/mp3" : "audio/wav";
+    mime = /\.(ogg|opus)$/i.test(wavPath) ? "audio/ogg" : /\.mp3$/i.test(wavPath) ? "audio/mp3" : /\.(mp4|m4a)$/i.test(wavPath) ? "audio/mp4" : "audio/wav";
   }
   const buf = readFileSync(wavPath);
   for (const thinking of ["low", "medium"] as const) {
     const c = await mediaCall({ type: "audio", data: buf.toString("base64"), mime_type: mime }, thinking);
     const j = MediaExtractSchema.parse(JSON.parse(c.text));
+    if (process.env.SPIKE_SHOW) console.log(`    التفريغ: ${j.transcript}
+    الادعاءات: ${j.claims.map((x) => `[${x.content_level}/${x.claim_type}] ${x.claim_text}`).join(" | ")}`);
     const sim = original ? 1 - lev(norm(j.transcript), norm(original)) / Math.max(norm(original).length, 1) : NaN;
     console.log(`[C] صوت ${mime} (${(buf.length / 1024).toFixed(0)}KB) thinking=${thinking}: ms=${c.ms} تشابه التفريغ=${(sim * 100).toFixed(1)}% clarity=${j.clarity} ادعاءات=${j.claims.length} توكنز(د/خ)=${c.usage.in}/${c.usage.out} تكلفة=$${cost(c.usage).toFixed(5)}`);
   }
