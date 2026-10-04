@@ -8,12 +8,13 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "tsx scripts/fetch-books.ts && next build",
+    "build": "tsx scripts/fetch-books.ts && tsx scripts/build-index.ts && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "spike:gemini": "tsx scripts/spike-gemini.ts",
-    "fetch-books": "tsx scripts/fetch-books.ts"
+    "fetch-books": "tsx scripts/fetch-books.ts",
+    "build-index": "tsx scripts/build-index.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",
