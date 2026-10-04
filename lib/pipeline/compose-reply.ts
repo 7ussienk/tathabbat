@@ -33,6 +33,9 @@ function claimBlock(c: ClaimResult, store: Store | null, compact: boolean): stri
     case "not_a_religious_claim":
       lines.push("  لا يوجد ادعاء ديني للتحقق منه في هذا النص.");
       break;
+    case "not_checked":
+      lines.push("  لم نفحص هذا الادعاء لأن الوقت المتاح انتهى أو لأن الرسالة تجاوزت عدد الادعاءات المفحوصة. أعد إرساله وحده لنفحصه، أو تحقق بنفسك:", `  ${c.verify_link}`);
+      break;
     case "search_unavailable":
       lines.push("  تعذّر البحث في المصادر الآن، ولذلك لا نستطيع الجزم بشيء. حاول بعد قليل.");
       break;
@@ -75,9 +78,12 @@ function claimBlock(c: ClaimResult, store: Store | null, compact: boolean): stri
 }
 
 /** الخطوة 7: رد جاهز للمشاركة يُبنى بقوالب ثابتة من الأحكام المنقولة (لا توليد، القاعدتان 15 و21). */
-export function composeReply(claims: ClaimResult[], store: Store | null): { reply_text: string; telegram_text: string } {
+export function composeReply(claims: ClaimResult[], store: Store | null, counts?: { total: number; examined: number }): { reply_text: string; telegram_text: string } {
   const build = (compact: boolean) => {
-    const parts = [OPENING, "", ...claims.map((c) => claimBlock(c, store, compact))];
+    const parts = [OPENING, ""];
+    // لا يُحذف ادعاء بصمت: يُذكر عدد ما فُحص من المجموع حين يقل عنه
+    if (counts && counts.examined < counts.total) parts.push(`فُحص ${counts.examined} من ${counts.total} ادعاءً؛ أعد إرسال الباقي في رسالة منفصلة.`, "");
+    parts.push(...claims.map((c) => claimBlock(c, store, compact)));
     if (claims.some((c) => NARRATION.includes(c.verdict))) parts.push("", RULING_NOTE);
     parts.push("", DISCLAIMER);
     return parts.join("\n");

@@ -146,6 +146,11 @@ export function VerifyApp() {
             {state.res.status === "partial" && state.res.error && (
               <ErrorBox message={state.res.error.message_ar} nextStep={state.res.error.next_step_ar} fallbackLink={searchLink(text)} />
             )}
+            {state.res.claims_total !== undefined && state.res.claims_examined !== undefined && state.res.claims_examined < state.res.claims_total && (
+              <p role="status" className="rounded-xl border border-line/40 bg-line/10 p-4 text-line">
+                فُحص {state.res.claims_examined} من {state.res.claims_total} ادعاءً؛ أعد إرسال الباقي في رسالة منفصلة.
+              </p>
+            )}
             {state.res.claims.map((c) => (
               <ClaimCard key={c.id} claim={c} sourceTitles={state.res.source_titles ?? {}} />
             ))}

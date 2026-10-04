@@ -26,6 +26,17 @@ export function ClaimCard({ claim, sourceTitles }: { claim: ClaimResult; sourceT
 
       {c.verdict === "not_a_religious_claim" && <p className="text-line">لم نجد في هذا النص ادعاءً دينياً يحتاج إلى تحقق.</p>}
 
+      {c.verdict === "not_checked" && (
+        <div className="space-y-2 rounded-xl border border-line/40 bg-line/10 p-4 text-line">
+          <p>لم نفحص هذا الادعاء لأن الوقت المتاح انتهى أو لأن الرسالة تجاوزت عدد الادعاءات المفحوصة. أعد إرساله وحده لنفحصه.</p>
+          <a href={c.verify_link} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 text-turquoise underline underline-offset-4">
+            <Icon name="search" className="size-4" />
+            أو ابحث عنه في الدرر السنية
+            <span className="sr-only">(يفتح في نافذة جديدة)</span>
+          </a>
+        </div>
+      )}
+
       {c.verdict === "search_unavailable" && (
         <p className="rounded-xl border border-line/40 bg-line/10 p-4 text-line">
           تعذّر تحميل فهرس المصادر الآن، ولذلك لا نستطيع الجزم بشيء عن هذا الادعاء. حاول بعد قليل.

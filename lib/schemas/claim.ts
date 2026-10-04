@@ -18,6 +18,7 @@ export const VERDICTS = [
   "wording_differs", // اللفظ يختلف عمّا في المصدر: يُعرض لفظ المصدر حرفياً دون وصف الادعاء بالخطأ (scoring-2026-10-04.2)
   "refer_to_scholar",
   "not_a_religious_claim",
+  "not_checked", // ادعاء لم يُفحص (انتهى الوقت أو تجاوز عدد الادعاءات المفحوصة)؛ يُعرض نصّه ولا يُحذف بصمت
 ] as const;
 export type Verdict = (typeof VERDICTS)[number];
 
@@ -96,6 +97,9 @@ export const VerifyResponseSchema = z.object({
       }),
     )
     .optional(),
+  /** عدد الادعاءات المستخرَجة من الرسالة، وعدد ما فُحص منها فعلاً (الباقي يظهر بحكم not_checked ولا يُحذف بصمت) */
+  claims_total: z.number().int().optional(),
+  claims_examined: z.number().int().optional(),
   /** النماذج التي خدمت فعلاً نداءات هذا الطلب (محاولات نجحت)، بلا نص رسالة: مثل ["gemini-3.7-flash"] */
   served_models: z.array(z.string()).optional(),
   /** نسخة المعجم والبرومتات التي أنتجت هذا الرد (lib/versions.ts) */
