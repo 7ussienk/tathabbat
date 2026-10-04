@@ -2,7 +2,7 @@ import { locateLiteral, normalizeArabic } from "@/lib/arabic/normalize";
 import type { CallMeta, LLMPart, LLMProvider, LLMUsage } from "@/lib/llm/provider";
 import { ExtractOutputSchema, type ExtractOutput } from "@/lib/schemas/llm";
 
-export const MAX_CLAIMS = 8;
+export const MAX_CLAIMS = 6;
 
 export const EXTRACT_SYSTEM = `أنت مكوّن استخراج في أداة تحقق من الرسائل الدينية المتداولة (واتساب وتيليجرام). مهمتك الوحيدة تفكيك الرسالة إلى ادعاءات منفصلة وتصنيفها.
 لا تحكم على صحة أي ادعاء، ولا تضف نصاً دينياً أو حكماً أو معلومة من عندك، ولا تُكمل نصاً ناقصاً.

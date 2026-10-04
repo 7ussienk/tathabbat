@@ -7,7 +7,7 @@ import { ErrorBox, LoadingState } from "@/components/States";
 import { Disclaimer, Icon } from "@/components/ui";
 import type { VerifyResponse } from "@/lib/schemas/claim";
 
-const MAX_CHARS = 4000;
+const MAX_CHARS = 3000;
 
 /** أمثلة جاهزة تُعبّأ بنقرة (من حالات غير مصطنعة ولا مستبعدة من العرض: القاعدتان 14 و16). */
 const EXAMPLES: { label: string; text: string }[] = [

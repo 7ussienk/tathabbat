@@ -29,7 +29,7 @@ export type VerifyDeps = {
   useCurated?: boolean;
 };
 
-export const MAX_TEXT_CHARS = 4000;
+export const MAX_TEXT_CHARS = 3000;
 
 const ERRORS = {
   llm_unavailable: {
