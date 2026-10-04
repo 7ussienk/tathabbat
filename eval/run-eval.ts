@@ -178,7 +178,8 @@ const cached = new CachingProvider(
   }),
   {
     dir: "eval/cache",
-    salt: [cfg.GEMINI_MODEL, cfg.GEMINI_FALLBACK_MODEL, PROMPT_VERSION, LEXICON_VERSION].join("|"),
+    // --cache-lexicon <نسخة>: يقرأ كاشاً بُني بنسخة معجم سابقة. المعجم يعمل بعد النموذج ولا يدخل في أي نداء، فمدخلات النداءات مطابقة ويصح إعادة الحساب من الكاش بلا نداءات (قرار 4 أكتوبر مساءً)
+    salt: [cfg.GEMINI_MODEL, cfg.GEMINI_FALLBACK_MODEL, PROMPT_VERSION, opt("--cache-lexicon") ?? LEXICON_VERSION].join("|"),
     maxUsd: MAX_USD,
     priceInPerM: cfg.PRICE_IN_PER_M,
     priceOutPerM: cfg.PRICE_OUT_PER_M,
@@ -246,7 +247,7 @@ try {
 if (!REPLAY && !VALIDATION) registry[fingerprint] = { at: new Date().toISOString(), commit: gitOut(["rev-parse", "--short", "HEAD"]).trim(), usd: Math.round(cached.stats.spentUsd * 1000) / 1000 };
 if (!REPLAY && !VALIDATION) writeFileSync(REGISTRY, JSON.stringify(registry, null, 1));
 if (!VALIDATION) logCost("اكتمل");
-console.log(`\nالمصروف فعلاً: ${cached.stats.spentUsd.toFixed(3)}$ | كاش: ${cached.stats.hits} إصابة / ${cached.stats.misses} نداء فعلي`);
+console.log(`\nالمصروف فعلاً: ${cached.stats.spentUsd.toFixed(3)}$ | كاش: ${cached.stats.hits} إصابة / ${cached.stats.misses} نداء فعلي${REPLAY ? ` | غير مخزَّن (فشل): ${cached.stats.unserved}` : ""}`);
 
 // ---------- التقرير ----------
 const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(1)}%` : "—");

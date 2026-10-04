@@ -2,7 +2,7 @@
  * أرقام نسخ المعجم والبرومتات. تُسجَّل مع كل نتيجة تقييم، وتُجمَّد قبل تشغيل مجموعة التحقق المستقلة
  * (docs/PHASE1_RESULTS.md). أي تعديل في lexicon أو في نص البرومتات يرفع الرقم.
  */
-export const LEXICON_VERSION = "lexicon-2026-10-04.3";
+export const LEXICON_VERSION = "lexicon-2026-10-04.4";
 /** نسخة منطق مطابقة اللفظ والتسجيل: 2 = مطابقة مرتّبة (ترتيب الكلمات وحدود الجمل ونافذة المتن) بعد خلل «انما النيات بالاعمال» */
 export const SCORING_VERSION = "scoring-2026-10-04.3";
 export const PROMPT_VERSION = "prompts-2026-10-04.5";

@@ -30,7 +30,8 @@ export type CacheOptions = {
 type Entry = { data: unknown; usage: LLMUsage; meta?: CallMeta };
 
 export class CachingProvider implements LLMProvider {
-  stats = { hits: 0, misses: 0, spentUsd: 0 };
+  /** unserved: نداء فشل (في --replay: نداء غير مخزَّن في الكاش) */
+  stats = { hits: 0, misses: 0, unserved: 0, spentUsd: 0 };
   constructor(private readonly inner: LLMProvider, private readonly o: CacheOptions) {
     mkdirSync(o.dir, { recursive: true });
   }
@@ -50,7 +51,13 @@ export class CachingProvider implements LLMProvider {
       return { data: req.schema.parse(e.data), usage: e.usage, meta: e.meta ?? { label: req.label, attempts: [{ model: "cache", ms: 0, outcome: "ok" }] } };
     }
     if (this.stats.spentUsd >= this.o.maxUsd) throw new BudgetExceededError(this.stats.spentUsd, this.o.maxUsd);
-    const r = await this.inner.generateJson(req);
+    let r: LLMResult<T>;
+    try {
+      r = await this.inner.generateJson(req);
+    } catch (e) {
+      this.stats.unserved++;
+      throw e;
+    }
     this.stats.misses++;
     this.stats.spentUsd += (r.usage.input_tokens * this.o.priceInPerM + r.usage.output_tokens * this.o.priceOutPerM) / 1e6;
     writeFileSync(file, JSON.stringify({ data: r.data, usage: r.usage, meta: r.meta } satisfies Entry));
