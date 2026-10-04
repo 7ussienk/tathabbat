@@ -15,7 +15,7 @@
 | الخطوط | Readex Pro (الواجهة)، Amiri وAmiri Quran وScheherazade New (النص المنقول والآيات ورموز الترضي) عبر `next/font/google` |
 | الاستضافة | Vercel (الرابط <https://tathabbat.vercel.app>)، الدالة في منطقة `iad1` (من قياس 4 أكتوبر)؛ Node 22.x |
 | الحجم | نحو 3857 سطر TypeScript في `lib/` و`app/` و`components/` (بلا الاختبارات والسكربتات) |
-| المستودع | <https://github.com/7ussienk/tathabbat> (عام). الترخيص: **لا ملف LICENSE بعد** |
+| المستودع | <https://github.com/7ussienk/tathabbat> (عام). الترخيص: MIT للكود فقط (`LICENSE`) |
 | تاريخ التطوير | 29 commit بين `pre-challenge-final` و`integration`؛ أول commit فيه كود 2026-10-04 09:16 (الرياض) |
 
 ## 2) المصادر وعدد المداخل المفهرسة فعلاً
