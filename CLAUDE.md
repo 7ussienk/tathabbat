@@ -115,6 +115,7 @@
 ```
 GEMINI_API_KEY=
 GEMINI_MODEL=
+GEMINI_FALLBACK_MODEL=   # يُعاد عليه الطلب فوراً عند تعثّر النموذج الأساسي (الافتراضي gemini-3.7-flash)
 GEMINI_FILE_SEARCH_STORE=
 VERIFY_API_TOKEN=        # n8n (اختياري) و/أو استدعاءات الخادم لـ /api/verify
 CONFIDENCE_THRESHOLD=0.75

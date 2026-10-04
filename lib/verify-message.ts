@@ -4,7 +4,7 @@
  */
 import { getConfig, type Config } from "@/lib/config";
 import { GeminiProvider } from "@/lib/llm/gemini";
-import { LLMError, type LLMProvider, type LLMUsage } from "@/lib/llm/provider";
+import { LLMError, type CallMeta, type LLMProvider, type LLMUsage } from "@/lib/llm/provider";
 import { logRequest } from "@/lib/log";
 import { VERSIONS } from "@/lib/versions";
 import { buildCurated, buildLive, buildNotFound, buildNotReligious, buildQuran, buildRefer, buildSearchUnavailable, type ExtractedClaim } from "@/lib/pipeline/build-claim";
@@ -63,6 +63,13 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
   const config = deps.config ?? getConfig();
   const timings: Record<string, number> = {};
   let usage = zeroUsage();
+  /** أثر نداءات النموذج (الخطوة والنموذج والزمن والنتيجة): مصدر أي تأخر، تقني بلا نص */
+  const trace: CallMeta[] = [];
+  const traceOut = () => trace.map((t) => ({ label: t.label, attempts: t.attempts.map((a) => ({ model: a.model, ms: a.ms, outcome: a.outcome })) }));
+  const noteFailure = (label: string, e: unknown) => {
+    const attempts = (e as LLMError).attempts;
+    if (attempts?.length) trace.push({ label, attempts });
+  };
 
   const finish = (partial: Omit<VerifyResponse, "request_id" | "input_type" | "disclaimer" | "timings_ms" | "usage" | "reply_text" | "telegram_text"> & { reply_text?: string; telegram_text?: string }, store: Store | null): VerifyResponse => {
     timings.total = Date.now() - t0;
@@ -76,6 +83,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       disclaimer: DISCLAIMER,
       timings_ms: timings,
       versions: { ...VERSIONS },
+      llm_trace: traceOut(),
       source_titles: Object.fromEntries(
         [...new Set(partial.claims.flatMap((c) => c.checked_sources ?? []))].flatMap((id) => (store?.sourceMeta[id] ? [[id, store.sourceMeta[id].title]] : [])),
       ),
@@ -97,6 +105,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       tokens_out: usage.output_tokens,
       cost_estimate_usd: res.usage!.cost_usd,
       error_code: res.error?.code,
+      llm_calls: res.llm_trace,
     });
     return res;
   };
@@ -104,7 +113,13 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
   const text = input.text.trim();
   if (!text || text.length > MAX_TEXT_CHARS) return finish({ claims: [], status: "error", error: ERRORS.invalid_input }, null);
 
-  const llm = deps.llm !== undefined ? deps.llm : config.GEMINI_API_KEY ? new GeminiProvider(config.GEMINI_API_KEY, config.GEMINI_MODEL, config.LLM_TIMEOUT_MS) : null;
+  const llm = deps.llm !== undefined ? deps.llm : config.GEMINI_API_KEY ? new GeminiProvider({
+          apiKey: config.GEMINI_API_KEY,
+          model: config.GEMINI_MODEL,
+          fallbackModel: config.GEMINI_FALLBACK_MODEL,
+          firstTimeoutMs: config.LLM_FIRST_TIMEOUT_MS,
+          fallbackTimeoutMs: config.LLM_FALLBACK_TIMEOUT_MS,
+        }) : null;
   if (!llm) return finish({ claims: [], status: "error", error: ERRORS.llm_unavailable }, null);
 
   const deadline = t0 + config.OVERALL_TIMEOUT_MS;
@@ -122,7 +137,9 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
     const r = await withDeadline(extractClaims(llm, text), deadline - Date.now());
     extracted = r.claims;
     usage = add(usage, r.usage);
-  } catch {
+    if (r.meta) trace.push(r.meta);
+  } catch (e) {
+    noteFailure("extract", e);
     timings.extract = Date.now() - te;
     return finish({ claims: [], status: "error", error: ERRORS.llm_unavailable }, null);
   }
@@ -141,8 +158,10 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
       try {
         return await withDeadline(processClaim(c, idx), deadline - Date.now());
       } catch (e) {
-        if (e instanceof LLMError) llmFailures++;
-        else throw e;
+        if (e instanceof LLMError) {
+          llmFailures++;
+          noteFailure("judge", e);
+        } else throw e;
         return null;
       }
     }),
@@ -166,6 +185,7 @@ export async function verifyMessage(input: VerifyInput, deps: VerifyDeps = {}): 
     const retrieved = retrieve(store, c.claim_text, undefined, { curated: deps.useCurated });
     const d = await judgeClaim(llm!, c.claim_text, retrieved, config.CONFIDENCE_THRESHOLD);
     usage = add(usage, d.usage);
+    if (d.meta) trace.push(d.meta);
     const retrievedIds = new Set(retrieved.candidates.map((x) => x.id));
 
     let r: ClaimResult;

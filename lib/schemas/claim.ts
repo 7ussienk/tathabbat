@@ -80,6 +80,15 @@ export const VerifyResponseSchema = z.object({
   usage: z.object({ input_tokens: z.number(), output_tokens: z.number(), cost_usd: z.number() }).optional(),
   /** عناوين الكتب المذكورة في checked_sources (للعرض فقط) */
   source_titles: z.record(z.string(), z.string()).optional(),
+  /** أثر نداءات النموذج (الخطوة والنموذج والزمن والنتيجة) لمعرفة مصدر أي تأخر؛ تقني بلا نص */
+  llm_trace: z
+    .array(
+      z.object({
+        label: z.string(),
+        attempts: z.array(z.object({ model: z.string(), ms: z.number(), outcome: z.enum(["ok", "timeout", "error", "invalid_output"]) })),
+      }),
+    )
+    .optional(),
   /** نسخة المعجم والبرومتات التي أنتجت هذا الرد (lib/versions.ts) */
   versions: z.object({ lexicon: z.string(), prompts: z.string() }).optional(),
 });

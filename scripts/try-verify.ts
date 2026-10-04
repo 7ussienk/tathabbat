@@ -157,6 +157,21 @@ for (const { r, res, wall } of results) {
   }
 }
 
+// مصدر التأخر: أزمنة كل محاولة حسب الخطوة (استخراج/حكم) والنموذج، ومعدل الاحتياطي والمهلات
+const att = new Map<string, number[]>();
+let calls = 0, fallbackUsed = 0, timeouts = 0, failedCalls = 0;
+for (const { res } of results) {
+  for (const t of res.llm_trace ?? []) {
+    calls++;
+    if (t.attempts.length > 1) fallbackUsed++;
+    if (!t.attempts.some((a) => a.outcome === "ok")) failedCalls++;
+    for (const a of t.attempts) {
+      if (a.outcome === "timeout") timeouts++;
+      const k = `${t.label} @ ${a.model} (${a.outcome})`;
+      att.set(k, [...(att.get(k) ?? []), a.ms]);
+    }
+  }
+}
 const pctl = (xs: number[], p: number) => [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor((p / 100) * xs.length))] ?? 0;
 if (verbose) console.log(lines.join("\n"));
 console.log(`\nالوضع: ${remote ? `remote ${remote}` : "محلي"} | ${noCurated ? "بدون curated" : "مع curated"} | ${rows.length} رسالة`);
@@ -170,6 +185,8 @@ console.log(`مواضع الفشل (بين الحالات الاسترجاعية
 console.log("حسب الفئة (إصابة/كلي، امتناع):");
 for (const [k, v] of byCat) console.log(`  ${k}: ${v.hit}/${v.total}${v.abstain ? `، امتناع ${v.abstain}` : ""}`);
 console.log(`زمن الاستجابة ms (${remote ? "من العميل شاملاً الشبكة" : "محلي"}): وسيط=${pctl(walls, 50)} p95=${pctl(walls, 95)} أقصى=${Math.max(...walls)} | خادم: وسيط=${pctl(server, 50)} أقصى=${Math.max(...server)} | الكلي ${Date.now() - t0}ms`);
+console.log(`نداءات النموذج: ${calls} | احتاجت النموذج الاحتياطي: ${fallbackUsed} | مهلات: ${timeouts} | فشلت كلياً: ${failedCalls}`);
+for (const [k, v] of [...att].sort()) console.log(`  ${k}: n=${v.length} وسيط=${pctl(v, 50)}ms p95=${pctl(v, 95)}ms أقصى=${Math.max(...v)}ms`);
 console.log(`توكنز ${tokensIn}/${tokensOut} | التكلفة $${cost.toFixed(4)} (≈ $${(cost / rows.length).toFixed(4)}/رسالة)`);
 const bad = lines.filter((l) => !l.startsWith("✓"));
 if (bad.length) console.log(`\nغير المصاب:\n${bad.join("\n")}`);
