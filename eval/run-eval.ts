@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { BudgetExceededError, CachingProvider } from "../lib/llm/cache";
 import { GeminiProvider } from "../lib/llm/gemini";
+import { LLMError, type LLMProvider } from "../lib/llm/provider";
 import { containsNormalized } from "../lib/arabic/normalize";
 import { getConfig } from "../lib/config";
 import { lexicalOverlap } from "../lib/pipeline/retrieve";
@@ -74,6 +75,11 @@ const hasIndexedSource = (ref?: string) => {
 };
 
 function match(e: Expected, claims: ClaimResult[]): ClaimResult | undefined {
+  // الحالات المضادة (قبول not_found_in_sources أو not_a_religious_claim): أيٌّ منهما مقبول، فلا يُفوَّت الأول بسبب الاستثناء أدناه. محصور بها لئلا تتساهل بقية الفئات.
+  if (e.accept.length > 1 && e.accept.every((a) => a === "not_found_in_sources" || a === "not_a_religious_claim")) {
+    const hit = claims.find((c) => e.accept.includes(c.verdict));
+    if (hit) return hit;
+  }
   if (e.accept.includes("refer_to_scholar")) return claims.find((c) => c.verdict === "refer_to_scholar");
   if (e.accept.includes("not_a_religious_claim")) return claims.find((c) => c.verdict === "not_a_religious_claim");
   return [...claims].sort((a, b) => lexicalOverlap(e.claim_hint, b.claim_text) - lexicalOverlap(e.claim_hint, a.claim_text))[0];
@@ -153,14 +159,17 @@ const fingerprint = createHash("sha256")
 const REGISTRY = "eval/results/evaluated.json";
 mkdirSync("eval/results", { recursive: true });
 const registry: Record<string, { at: string; commit: string; usd: number }> = existsSync(REGISTRY) ? JSON.parse(readFileSync(REGISTRY, "utf8")) : {};
-if (registry[fingerprint] && !args.includes("--force")) {
+// --replay: يعيد حساب التقرير من الكاش فقط بلا أي نداء (النداء غير المخزَّن ⟵ llm_unavailable)، فلا يخضع لرفض البصمة ولا يُسجَّل في COST_LOG
+const REPLAY = args.includes("--replay");
+if (!REPLAY && registry[fingerprint] && !args.includes("--force")) {
   const p = registry[fingerprint];
   console.error(`رُفض التشغيل: هذا الـcommit والإعدادات سبق تقييمهما (${p.at}، ${p.commit}، ${p.usd}$). لا إعادة إلا بطلب صريح: --force`);
   process.exit(4);
 }
 let RUN_ID = "";
+const replayInner: LLMProvider = { generateJson: async () => { throw new LLMError("replay: لا نتيجة مخزَّنة لهذا النداء", "unavailable"); } };
 const cached = new CachingProvider(
-  new GeminiProvider({
+  REPLAY ? replayInner : new GeminiProvider({
     apiKey: cfg.GEMINI_API_KEY!,
     model: cfg.GEMINI_MODEL,
     fallbackModel: cfg.GEMINI_FALLBACK_MODEL,
@@ -178,6 +187,7 @@ const cached = new CachingProvider(
 );
 /** يسجّل ما صُرف فعلاً في docs/COST_LOG.md (قاعدة الميزانية 1) */
 const logCost = (note: string) => {
+  if (REPLAY) return;
   const when = new Date().toISOString().slice(0, 16).replace("T", " ");
   const commit = gitOut(["rev-parse", "--short", "HEAD"]).trim();
   const row = `| ${when} UTC | npm run eval (${MODES.join("+")} x${RUNS}) | ${commit} / ${fingerprint} | ${cached.stats.spentUsd.toFixed(3)}$ | ${note}؛ كاش: ${cached.stats.hits} إصابة / ${cached.stats.misses} نداء فعلي |\n`;
@@ -232,8 +242,8 @@ try {
   }
   throw e;
 }
-registry[fingerprint] = { at: new Date().toISOString(), commit: gitOut(["rev-parse", "--short", "HEAD"]).trim(), usd: Math.round(cached.stats.spentUsd * 1000) / 1000 };
-writeFileSync(REGISTRY, JSON.stringify(registry, null, 1));
+if (!REPLAY) registry[fingerprint] = { at: new Date().toISOString(), commit: gitOut(["rev-parse", "--short", "HEAD"]).trim(), usd: Math.round(cached.stats.spentUsd * 1000) / 1000 };
+if (!REPLAY) writeFileSync(REGISTRY, JSON.stringify(registry, null, 1));
 logCost("اكتمل");
 console.log(`\nالمصروف فعلاً: ${cached.stats.spentUsd.toFixed(3)}$ | كاش: ${cached.stats.hits} إصابة / ${cached.stats.misses} نداء فعلي`);
 
