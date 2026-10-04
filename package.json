@@ -4,15 +4,16 @@
   "private": true,
   "description": "تثبّت — مدقق ذكي للرسائل الدينية المتداولة",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "tsx scripts/fetch-books.ts && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "spike:gemini": "tsx scripts/spike-gemini.ts"
+    "spike:gemini": "tsx scripts/spike-gemini.ts",
+    "fetch-books": "tsx scripts/fetch-books.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",
@@ -30,7 +31,7 @@
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^5.0.3"
   },
   "type": "module"

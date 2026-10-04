@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+/* الهوية: docs/DESIGN.md §2. الألوان متغيرات فقط ولا قيم لونية داخل المكوّنات. */
+:root {
+  --navy: #12183f;
+  --navy-deep: #161d48;
+  --card: #323d68;
+  --muted: #4a5590;
+  --muted-light: #8e99cc;
+  --line: #cbcfe6;
+  --lavender: #e0d9fb;
+  --offwhite: #f2f4ff;
+  --purple: #6150ea;
+  --turquoise: #2ef2c2;
+  --ok: #2ef2c2;
+  --warn: #f5b83d;
+  --danger: #ff7a8a;
+  --info: #a89bff;
+}
+
+@theme inline {
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-light: var(--muted-light);
+  --color-line: var(--line);
+  --color-lavender: var(--lavender);
+  --color-offwhite: var(--offwhite);
+  --color-purple: var(--purple);
+  --color-turquoise: var(--turquoise);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --font-sans: var(--font-readex), system-ui, sans-serif;
+}
+
+html {
+  background: var(--navy);
+  color: var(--offwhite);
+}
+
+body {
+  min-height: 100dvh;
+  font-family: var(--font-readex), system-ui, sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.8;
+  /* زخرفة القالب مختزلة: توهّجان خفيفان في زاويتين (DESIGN.md §4) */
+  background:
+    radial-gradient(60rem 30rem at 100% -10%, rgb(97 80 234 / 0.22), transparent 70%),
+    radial-gradient(50rem 28rem at 0% 110%, rgb(46 242 194 / 0.1), transparent 70%),
+    linear-gradient(180deg, var(--navy), var(--navy-deep));
+  background-attachment: fixed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
