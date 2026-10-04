@@ -31,11 +31,20 @@ const verbose = args.includes("--verbose");
 const noCurated = args.includes("--no-curated");
 const remote = opt("--remote");
 const outFile = opt("--out");
+const file = opt("--file") ?? "eval/dataset.jsonl";
 
-const rows: Row[] = readFileSync("eval/dataset.jsonl", "utf8")
+const dataset = readFileSync("eval/dataset.jsonl", "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as Row);
+// ملف التسرب (eval/leakage.jsonl): صفّان يحيلان إلى حالات dataset (ref_case) ويُتوقع فيهما not_found_in_sources بدون curated فقط
+const rows: Row[] = readFileSync(file, "utf8")
   .split("\n")
   .filter(Boolean)
-  .map((l) => JSON.parse(l) as Row)
+  .map((l) => JSON.parse(l) as Row & { ref_case?: string })
+  .flatMap((r): Row[] => {
+    if (!r.ref_case) return [r];
+    if (!noCurated) return []; // مع curated هي حالات عادية في dataset
+    const base = dataset.find((d) => d.id === r.ref_case)!;
+    return [{ ...base, id: r.id, category: "leakage", critical: true, expected: base.expected.map((e) => ({ claim_hint: e.claim_hint, accept: ["not_found_in_sources"], level: e.level })) }];
+  })
   .filter((r) => r.input_type === "text" && (!ids || ids.includes(r.id)))
   .slice(0, limit);
 
