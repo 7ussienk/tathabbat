@@ -10,10 +10,13 @@ import type { BookEntry } from "@/lib/retrieval/chunk-maqasid";
 import { loadIndex, type IndexDoc } from "@/lib/retrieval/text-index";
 import type { CuratedEntry } from "@/lib/schemas/curated";
 
+export type SourceMeta = { title: string; author?: string; turath_book_id?: number; reviewed: boolean };
+
 export type Store = {
   index: MiniSearch<IndexDoc>;
   entries: Map<string, BookEntry>;
   curated: Map<string, CuratedEntry>;
+  sourceMeta: Record<string, SourceMeta>;
   /** الكتب المفهرسة فعلاً (checked_sources) */
   indexedSources: string[];
   loadedAt: number;
@@ -28,13 +31,14 @@ async function load(): Promise<Store> {
     readFile(path.join(dir(), "text-index.json"), "utf8"),
     readFile(path.join(dir(), "store.json"), "utf8"),
   ]);
-  const raw = JSON.parse(storeJson) as { entries: BookEntry[]; curated: CuratedEntry[] };
+  const raw = JSON.parse(storeJson) as { entries: BookEntry[]; curated: CuratedEntry[]; source_meta: Record<string, SourceMeta> };
   const entries = new Map(raw.entries.map((e) => [e.id, e]));
   const curated = new Map(raw.curated.map((c) => [c.id, c]));
   return {
     index: loadIndex(indexJson),
     entries,
     curated,
+    sourceMeta: raw.source_meta ?? {},
     indexedSources: [...new Set(raw.entries.map((e) => e.source_id))],
     loadedAt: Date.now(),
   };

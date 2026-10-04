@@ -15,7 +15,8 @@
     "spike:gemini": "tsx scripts/spike-gemini.ts",
     "fetch-books": "tsx scripts/fetch-books.ts",
     "build-index": "tsx scripts/build-index.ts",
-    "precheck": "tsx scripts/precheck.ts"
+    "precheck": "tsx scripts/precheck.ts",
+    "try-verify": "tsx scripts/try-verify.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",

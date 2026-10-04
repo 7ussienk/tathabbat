@@ -49,7 +49,13 @@ async function main() {
   await mkdir(OUT, { recursive: true });
   const json = JSON.stringify(index);
   await writeFile(path.join(OUT, "text-index.json"), json);
-  await writeFile(path.join(OUT, "store.json"), JSON.stringify({ entries, curated }));
+  // بيانات المصادر لوقت التشغيل (العنوان والمؤلف ومعرّف تراث) بلا حاجة لقراءة الـ manifest هناك
+  const source_meta: Record<string, { title: string; author?: string; turath_book_id?: number; reviewed: boolean }> = {};
+  for (const m of manifest) {
+    if (m.type === "remote_service" || m.type === "external_link_only") continue;
+    source_meta[m.id] = { title: m.title, author: m.author, turath_book_id: m.turath_book_id ?? undefined, reviewed: m.reviewed };
+  }
+  await writeFile(path.join(OUT, "store.json"), JSON.stringify({ entries, curated, source_meta }));
   await writeFile(
     path.join(OUT, "index-report.json"),
     JSON.stringify({ built_at: new Date().toISOString(), docs: docs.length, books: checked, curated: curated.length, index_bytes: json.length }, null, 2),
