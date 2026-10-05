@@ -159,8 +159,20 @@ npm test                    # اختبارات الوحدة (بمزوّد وهم
 - **ما بُني خلال التحدي** يظهر في المقارنة: [`pre-challenge-final...main`](https://github.com/7ussienk/tathabbat/compare/pre-challenge-final...main). والكود المجمَّد للمرحلة النصية موسوم `text-phase-freeze`.
 - **الإفصاح:** **بُني المشروع بمساعدة Claude Code (Anthropic)**، ويستخدم Gemini (Google) في استخراج الادعاءات واختيار المرشح فقط؛ ولا يصدر أي حكم شرعي من النموذج.
 
+## الاعتمادات
+
+نشكر من بُني عليهم هذا العمل. ذكرهم هنا اعتراف بفضلهم لا يعني تزكيتهم للمشروع ولا رعايتهم له، والتفاصيل والتراخيص وما لم يُتحقق منه في [`SOURCES.md`](SOURCES.md) و[`docs/TOOLS_AND_LICENSES.md`](docs/TOOLS_AND_LICENSES.md).
+
+- **مؤلفو الكتب المفهرسة:** **البخاري** (صحيح البخاري، ت البغا)، و**مسلم بن الحجاج** (صحيح مسلم، ت محمد فؤاد عبد الباقي)، و**السخاوي** (المقاصد الحسنة، ت الغماري)، كما في `data/sources/manifest.json`. وحقوق الطبعات والتحقيقات لأصحابها وناشريها، ولهذا لا تُنشر متون الكتب في المستودع.
+- **تراث (turath.io):** مصدر نص الفهرس وقت البناء. **المكتبة الشاملة (shamela.ws):** مرجع المقارنة والتحقق وروابط العزو. **الدرر السنية (dorar.net):** رابط تحقق خارجي فقط، ولا يُنسخ منها شيء.
+- **Tanzil:** نص القرآن (Uthmani v1.1) من مشروع [Tanzil](https://tanzil.net) بترخيص Creative Commons Attribution 3.0، حرفياً بلا تعديل.
+- **Google:** Gemini API لاستخراج الادعاءات واختيار المرشح وتفريغ الصوت (لا يصدر منه حكم شرعي)، وخطوط Google Fonts (Readex Pro وAmiri وAmiri Quran وScheherazade New، وأصحابها مشاريعها ومنهم SIL Global).
+- **Vercel:** استضافة التطبيق.
+- **المكتبات مفتوحة المصدر:** Next.js وReact وTailwind CSS وZod وMiniSearch وTypeScript وVitest وPlaywright وغيرها (القائمة والتراخيص في `docs/TOOLS_AND_LICENSES.md`).
+- **Claude Code (Anthropic):** بُني المشروع بمساعدته (انظر الإفصاح أعلاه).
+
 ## الترخيص
 ترخيص MIT للكود فقط؛ لا يشمل نصوص الكتب المجلوبة وقت البناء، ولكل مصدر حقوقه (انظر [`SOURCES.md`](SOURCES.md)). نص الملف: [`LICENSE`](LICENSE).
 
 ## وثائق إضافية
-[`SOURCES.md`](SOURCES.md) المصادر والتراخيص · [`docs/DECISIONS.md`](docs/DECISIONS.md) القرارات · [`docs/KNOWN_LIMITS.md`](docs/KNOWN_LIMITS.md) الحدود · [`docs/PHASE1_RESULTS.md`](docs/PHASE1_RESULTS.md) النتائج · [`docs/ROADMAP.md`](docs/ROADMAP.md) ما بعد التحدي · [`eval/DATASET_GUIDE.md`](eval/DATASET_GUIDE.md) مجموعة الاختبار · [`CLAUDE.md`](CLAUDE.md) مرجع البناء.
+[`SOURCES.md`](SOURCES.md) المصادر والتراخيص · [`docs/TOOLS_AND_LICENSES.md`](docs/TOOLS_AND_LICENSES.md) الأدوات والمكتبات والخطوط والاعتمادات · [`docs/MANUAL_CHECKS.md`](docs/MANUAL_CHECKS.md) الفحوص اليدوية · [`docs/DECISIONS.md`](docs/DECISIONS.md) القرارات · [`docs/KNOWN_LIMITS.md`](docs/KNOWN_LIMITS.md) الحدود · [`docs/PHASE1_RESULTS.md`](docs/PHASE1_RESULTS.md) النتائج · [`docs/ROADMAP.md`](docs/ROADMAP.md) ما بعد التحدي · [`eval/DATASET_GUIDE.md`](eval/DATASET_GUIDE.md) مجموعة الاختبار · [`CLAUDE.md`](CLAUDE.md) مرجع البناء.
