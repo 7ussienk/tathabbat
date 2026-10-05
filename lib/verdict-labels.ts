@@ -5,7 +5,7 @@ export const VERDICT_LABELS: Record<Verdict, { label: string; tone: "ok" | "warn
   authentic: { label: "صحيح", tone: "ok" },
   weak: { label: "ضعيف", tone: "warn" },
   fabricated: { label: "موضوع", tone: "danger" },
-  no_basis_per_scholar: { label: "لا أصل له (حكم منقول)", tone: "danger" },
+  no_basis_per_scholar: { label: "نفي الأصل — قول المؤلف", tone: "danger" },
   disputed: { label: "مختلف في الحكم عليه", tone: "warn" },
   misattributed: { label: "ليس من كلام النبي ﷺ، ويُنسب لغيره", tone: "warn" },
   not_found_in_sources: { label: "لم نجد له أصلاً في المصادر المعتمدة التي فُحصت", tone: "neutral" },
