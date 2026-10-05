@@ -56,6 +56,20 @@ body {
   background-attachment: fixed;
 }
 
+/* لا نص غير قابل للكسر (رابط مرمَّز طويل في الرد الجاهز أو ادعاء يحوي رابطاً أو رابط مصدر) يوسّع الصفحة على الجوال */
+main {
+  min-width: 0;
+  max-width: 100%;
+}
+main :where(p, a, h1, h2, h3, blockquote, figcaption, summary, li, span, dd, dt) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+main :where(article, section, figure, details, div) {
+  min-width: 0;
+  max-width: 100%;
+}
+
 :focus-visible {
   outline: 2px solid var(--turquoise);
   outline-offset: 2px;

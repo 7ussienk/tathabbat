@@ -25,7 +25,7 @@ export function SourceQuote({ s, label = "نص منقول من المصدر", qu
   const hasContext = !!s.grading_quote && s.quoted_text.trim() !== s.grading_quote.trim();
   const font = quran ? "font-quran" : "font-quote";
   return (
-    <figure className="rounded-xl border border-card bg-card/40 p-4">
+    <figure className="min-w-0 max-w-full rounded-xl border border-card bg-card/40 p-4">
       <figcaption className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-line">
         <span className="font-medium text-turquoise">{label}</span>
         <span>
@@ -55,7 +55,7 @@ export function SourceQuote({ s, label = "نص منقول من المصدر", qu
       )}
       {s.attribution_note && <p className="mt-3 text-sm text-muted-light">{s.attribution_note}</p>}
       {s.url && (
-        <a href={s.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg text-base text-turquoise underline underline-offset-4">
+        <a href={s.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 max-w-full items-center gap-2 rounded-lg text-base text-turquoise underline underline-offset-4">
           <Icon name="link" className="size-4" />
           {linkLabel(s.url)}
           <span className="sr-only">(يفتح في نافذة جديدة)</span>

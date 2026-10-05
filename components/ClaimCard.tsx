@@ -11,8 +11,8 @@ export function ClaimCard({ claim, sourceTitles }: { claim: ClaimResult; sourceT
   const checked = (c.checked_sources ?? []).map((id) => sourceTitles[id] ?? id);
   const headingId = `claim-${c.id}`;
   return (
-    <article aria-labelledby={headingId} className="space-y-4 rounded-2xl border border-card bg-navy-deep p-4 sm:p-6">
-      <h3 id={headingId} className="text-lg font-semibold leading-8 text-offwhite">
+    <article aria-labelledby={headingId} className="min-w-0 max-w-full space-y-4 rounded-2xl border border-card bg-navy-deep p-4 sm:p-6">
+      <h3 id={headingId} className="text-lg font-semibold leading-8 text-offwhite [overflow-wrap:anywhere]">
         «{c.claim_text}»
       </h3>
 
