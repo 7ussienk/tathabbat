@@ -12,7 +12,17 @@ import { verifyLink } from "../lib/verify-link";
 
 const PORT = 3061;
 const BASE = process.env.BASE_URL ?? `http://localhost:${PORT}`;
-const WIDTHS = [390, 360];
+/** جوال (بأجهزة لمس) وسطح مكتب/لوحي: لا تجاوز أفقي في أيٍّ منها، وعرض الحاوية الرئيسية على العريض لا يتجاوز ما كان قبل إصلاح الفيض (قيس: 768px) */
+const WIDTHS = [
+  { width: 390, mobile: true },
+  { width: 360, mobile: true },
+  { width: 768, mobile: false },
+  { width: 1024, mobile: false },
+  { width: 1440, mobile: false },
+];
+const MAX_CONTAINER_PX = 768;
+const MARGIN_PX = 2;
+const MEASURE_ONLY = process.argv.includes("--measure");
 
 const longUrl = "https://example.test/very/long/path/with/many/segments/and/query?token=TEST_TOKEN_0123456789abcdefghijklmnopqrstuvwxyz&ref=TEST";
 const c1 = "نص تجريبي أول TEST_HADITH_001 يعمل حرفياً في المصدر";
@@ -89,8 +99,8 @@ async function main(): Promise<number> {
   const browser = await chromium.launch({ headless: true, channel: "chromium" });
   let failed = 0;
   try {
-    for (const width of WIDTHS) {
-      const ctx = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, locale: "ar-SA", colorScheme: "dark" });
+    for (const { width, mobile } of WIDTHS) {
+      const ctx = await browser.newContext({ viewport: { width, height: 844 }, isMobile: mobile, hasTouch: mobile, deviceScaleFactor: 2, locale: "ar-SA", colorScheme: "dark" });
       const page = await ctx.newPage();
       await page.route("**/api/verify", (route) => route.fulfill({ json: mock }));
       await page.goto(BASE, { waitUntil: "networkidle", timeout: 90_000 });
@@ -111,8 +121,15 @@ async function main(): Promise<number> {
       await page.getByText("الرد الجاهز للمشاركة").waitFor();
       await page.waitForTimeout(400);
       const after = await measure();
-      const ok = before.sw <= before.iw && after.sw <= after.iw;
-      console.log(`${ok ? "✓" : "✗"} ${width}px: قبل النتائج ${before.sw}/${before.iw}، بعدها ${after.sw}/${after.iw}`);
+      // عروض الحاويات بعد ظهور النتائج: الرأس والحاوية الرئيسية وبطاقة الإدخال وأول بطاقة والرد الجاهز
+      const [header, main, input, card, reply] = await page.evaluate(
+        (sels) => sels.map((sel) => Math.round(document.querySelector(sel)?.getBoundingClientRect().width ?? -1)),
+        ["header", "main", "section[aria-labelledby=input-h]", "article", "section[aria-labelledby=reply-h]"],
+      );
+      const w = { header, main, input, card, reply };
+      const containerOk = !mobile ? Math.max(w.header, w.main, w.input, w.card, w.reply) <= MAX_CONTAINER_PX + MARGIN_PX : true;
+      const ok = before.sw <= before.iw && after.sw <= after.iw && containerOk;
+      console.log(`${ok ? "✓" : "✗"} ${width}px: قبل النتائج ${before.sw}/${before.iw}، بعدها ${after.sw}/${after.iw} | عرض: رأس ${w.header} حاوية ${w.main} إدخال ${w.input} بطاقة ${w.card} رد ${w.reply}${containerOk ? "" : ` (> ${MAX_CONTAINER_PX}+${MARGIN_PX})`}`);
       if (!ok) {
         failed++;
         for (const o of after.over) console.log(`   متجاوز: ${o}`);
@@ -128,11 +145,11 @@ async function main(): Promise<number> {
 main()
   .then((failed) => {
     stopServer();
-    if (failed) {
+    if (failed && !MEASURE_ONLY) {
       console.error(`✗ حارس الفيض الأفقي فشل في ${failed} عرض/عروض`);
       process.exit(1);
     }
-    console.log("✓ لا فيض أفقي في النتائج على الجوال");
+    console.log(failed ? "(وضع القياس فقط)" : "✓ لا فيض أفقي، وعرض الحاوية ضمن الحد على كل العروض");
     process.exit(0);
   })
   .catch((e) => {
