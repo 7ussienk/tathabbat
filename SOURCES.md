@@ -64,8 +64,8 @@
 
 ## 5) أخرى
 
-- **الخطوط:** Readex Pro وAmiri وAmiri Quran وScheherazade New عبر `next/font/google` (ترخيصها المنشور في Google Fonts مفتوح؛ لم يُراجَع نصه هنا).
-- **اعتماديات npm:** لم تُدقَّق تراخيصها في هذا الفحص (**لم يُتحقق**).
+- **الخطوط:** Readex Pro وAmiri وAmiri Quran وScheherazade New عبر `next/font/google`. بيانات الخطوط المبنية تشير إلى SIL Open Font License (Scheherazade New صراحة، والبقية برابط openfontlicense.org)؛ التفصيل وما لم يُتحقق منه في [`docs/TOOLS_AND_LICENSES.md`](docs/TOOLS_AND_LICENSES.md).
+- **اعتماديات npm:** دُقِّقت حقول `license` فيها (223 حزمة في ملف القفل: لا GPL/AGPL ولا ترخيص مجهول؛ LGPL في ثنائيات `sharp` الاختيارية) في [`docs/TOOLS_AND_LICENSES.md`](docs/TOOLS_AND_LICENSES.md). نصوص التراخيص الكاملة لم تُراجَع.
 - **ترخيص المستودع:** MIT للكود فقط (ملف `LICENSE`)؛ لا يشمل نصوص الكتب المجلوبة وقت البناء ولا نص Tanzil، ولكل مصدر حقوقه كما فوق.
 
 ## 6) كتب القائمة البيضاء غير المفهرسة (26)
