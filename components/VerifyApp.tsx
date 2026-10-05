@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ClaimCard } from "@/components/ClaimCard";
 import { CopyReply } from "@/components/CopyReply";
 import { ErrorBox, LoadingState } from "@/components/States";
@@ -10,6 +10,10 @@ import type { VerifyResponse } from "@/lib/schemas/claim";
 const MAX_CHARS = 3000;
 /** حد الصوت (يطابق الخادم: lib/pipeline/normalize-input.ts) */
 const MAX_AUDIO_BYTES = 2 * 1024 * 1024;
+/** التسجيل المباشر: يُوقَف تلقائياً عند 30 ثانية، ويُختار أول نوع يدعمه المتصفح */
+const MAX_REC_SECONDS = 30;
+const REC_MIMES = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg"];
+const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 const AUDIO_ACCEPT = "audio/*,.ogg,.oga,.opus,.mp3,.m4a,.aac,.wav,.flac";
 
 /** أمثلة جاهزة تُعبّأ بنقرة (من حالات غير مصطنعة ولا مستبعدة من العرض: القاعدتان 14 و16). */
@@ -35,6 +39,76 @@ export function VerifyApp() {
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioErr, setAudioErr] = useState<ErrorInfo | null>(null);
   const [fromAudio, setFromAudio] = useState(false);
+  // التسجيل المباشر (MediaRecorder): لا يُحفظ شيء، ويُرسَل الناتج إلى /api/transcribe نفسه
+  const [canRecord, setCanRecord] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const recRef = useRef<{ timer: ReturnType<typeof setInterval>; rec: MediaRecorder; send: boolean } | null>(null);
+
+  useEffect(() => {
+    setCanRecord(typeof MediaRecorder !== "undefined" && !!navigator.mediaDevices?.getUserMedia);
+    return () => stopRecording(false);
+  }, []);
+
+  function stopRecording(send: boolean) {
+    const r = recRef.current;
+    if (!r) return;
+    recRef.current = null;
+    r.send = send;
+    clearInterval(r.timer);
+    setRecording(false);
+    if (r.rec.state !== "inactive") r.rec.stop();
+  }
+
+  async function startRecording() {
+    setMenuOpen(false);
+    setAudioErr(null);
+    const mime = REC_MIMES.find((m) => MediaRecorder.isTypeSupported(m));
+    if (!mime) {
+      setAudioErr({ message: "متصفحك لا يدعم التسجيل الصوتي.", nextStep: "ارفع ملفاً صوتياً بدل ذلك، أو اكتب الرسالة." });
+      return;
+    }
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      const n = (e as Error).name;
+      setAudioErr(
+        n === "NotAllowedError" || n === "SecurityError"
+          ? { message: "لم يُسمح للموقع باستخدام الميكروفون.", nextStep: "اسمح بالميكروفون من إعدادات المتصفح ثم أعد المحاولة، أو ارفع ملفاً صوتياً، أو اكتب الرسالة." }
+          : n === "NotFoundError" || n === "OverconstrainedError"
+            ? { message: "لم نجد ميكروفوناً في جهازك.", nextStep: "وصّل ميكروفوناً ثم أعد المحاولة، أو ارفع ملفاً صوتياً، أو اكتب الرسالة." }
+            : { message: "تعذّر بدء التسجيل.", nextStep: "أعد المحاولة، أو ارفع ملفاً صوتياً، أو اكتب الرسالة." },
+      );
+      return;
+    }
+    const rec = new MediaRecorder(stream, { mimeType: mime });
+    const chunks: Blob[] = [];
+    const t0 = Date.now();
+    const st = {
+      timer: setInterval(() => {
+        const sec = (Date.now() - t0) / 1000;
+        setElapsed(Math.floor(sec));
+        if (sec >= MAX_REC_SECONDS) stopRecording(true);
+      }, 250),
+      rec,
+      send: true,
+    };
+    rec.ondataavailable = (e) => {
+      if (e.data.size) chunks.push(e.data);
+    };
+    rec.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      if (!st.send || !chunks.length) return;
+      const type = (rec.mimeType || mime).split(";")[0];
+      void onAudio(new File(chunks, `rec.${type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm"}`, { type }));
+    };
+    recRef.current = st;
+    setElapsed(0);
+    setRecording(true);
+    rec.start();
+  }
 
   async function onAudio(file: File) {
     setAudioErr(null);
@@ -139,23 +213,52 @@ export function VerifyApp() {
               if (f) void onAudio(f);
             }}
           />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={audioBusy || busy}
-            aria-describedby="audio-hint"
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-card px-4 text-base text-line hover:border-turquoise/60 hover:text-offwhite disabled:opacity-60"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5 shrink-0" aria-hidden="true">
-              <rect x="9" y="3" width="6" height="11" rx="3" />
-              <path d="M5 11a7 7 0 0014 0M12 18v3" />
-            </svg>
-            {audioBusy ? "جارٍ استخراج النص…" : "صوت"}
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => (canRecord ? setMenuOpen((o) => !o) : fileRef.current?.click())}
+              disabled={audioBusy || busy || recording}
+              aria-describedby="audio-hint"
+              aria-haspopup={canRecord ? "menu" : undefined}
+              aria-expanded={canRecord ? menuOpen : undefined}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-card px-4 text-base text-line hover:border-turquoise/60 hover:text-offwhite disabled:opacity-60"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5 shrink-0" aria-hidden="true">
+                <rect x="9" y="3" width="6" height="11" rx="3" />
+                <path d="M5 11a7 7 0 0014 0M12 18v3" />
+              </svg>
+              {audioBusy ? "جارٍ استخراج النص…" : "صوت"}
+            </button>
+            {menuOpen && canRecord && (
+              <div role="menu" className="absolute end-0 z-10 mt-2 w-44 space-y-1 rounded-xl border border-card bg-navy-deep p-2 shadow-lg">
+                <button type="button" role="menuitem" onClick={startRecording} className="min-h-11 w-full rounded-lg px-3 text-start text-offwhite hover:bg-card">
+                  سجّل الآن
+                </button>
+                <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); fileRef.current?.click(); }} className="min-h-11 w-full rounded-lg px-3 text-start text-offwhite hover:bg-card">
+                  ارفع ملفاً
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <p id="audio-hint" className="sr-only">
           ارفع مقطعاً صوتياً (حتى 30 ثانية) لاستخراج نصه ومراجعته قبل التحقق
         </p>
+        {recording && (
+          <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-danger/40 bg-danger/10 p-3">
+            <span aria-hidden="true" className="size-3 animate-pulse rounded-full bg-danger" />
+            <span className="text-offwhite">جارٍ التسجيل…</span>
+            <span aria-hidden="true" dir="ltr" className="tabular-nums text-line">
+              {fmtTime(elapsed)} / {fmtTime(MAX_REC_SECONDS)}
+            </span>
+            <button type="button" onClick={() => stopRecording(true)} className="min-h-11 rounded-xl bg-turquoise px-5 font-semibold text-navy hover:opacity-90">
+              إيقاف وإرسال
+            </button>
+            <button type="button" onClick={() => stopRecording(false)} className="min-h-11 rounded-xl px-4 text-line underline underline-offset-4">
+              إلغاء
+            </button>
+          </div>
+        )}
         {audioBusy && (
           <p role="status" className="text-sm text-line">
             نستخرج النص من المقطع، لحظات…
@@ -188,7 +291,7 @@ export function VerifyApp() {
           <button
             type="button"
             onClick={submit}
-            disabled={busy || audioBusy}
+            disabled={busy || audioBusy || recording}
             className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-turquoise px-8 text-lg font-semibold text-navy hover:opacity-90 disabled:opacity-60"
           >
             <Icon name="check" className="size-5" />
