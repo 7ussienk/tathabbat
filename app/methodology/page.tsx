@@ -88,6 +88,18 @@ export default async function Methodology() {
         <p className="text-line">
           قائمة الكتب المعتمدة تضم {whitelist.toLocaleString("ar")} كتاباً، والمفهرس منها الآن {indexed.length.toLocaleString("ar")} فقط. لذلك فعبارة «لم نجد» تعني أننا لم نجد في الكتب المفهرسة التي فُحصت، وهي ليست حكماً شرعياً على النص ولا تعني أنه لا أصل له.
         </p>
+        <p className="text-line">
+          تفاصيل المصادر وتراخيصها في المستودع:{" "}
+          <a className="inline-flex min-h-11 items-center px-1 text-turquoise underline underline-offset-4" href="https://github.com/7ussienk/tathabbat/blob/main/SOURCES.md" target="_blank" rel="noopener noreferrer">
+            سجل المصادر (SOURCES.md)
+            <span className="sr-only">(يفتح في نافذة جديدة)</span>
+          </a>
+          {" · "}
+          <a className="inline-flex min-h-11 items-center px-1 text-turquoise underline underline-offset-4" href="https://github.com/7ussienk/tathabbat/blob/main/docs/TOOLS_AND_LICENSES.md" target="_blank" rel="noopener noreferrer">
+            الأدوات والتراخيص (TOOLS_AND_LICENSES.md)
+            <span className="sr-only">(يفتح في نافذة جديدة)</span>
+          </a>
+        </p>
       </section>
 
       <section className="space-y-3">

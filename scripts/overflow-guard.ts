@@ -130,6 +130,11 @@ async function main(): Promise<number> {
       const containerOk = !mobile ? Math.max(w.header, w.main, w.input, w.card, w.reply) <= MAX_CONTAINER_PX + MARGIN_PX : true;
       const ok = before.sw <= before.iw && after.sw <= after.iw && containerOk;
       console.log(`${ok ? "✓" : "✗"} ${width}px: قبل النتائج ${before.sw}/${before.iw}، بعدها ${after.sw}/${after.iw} | عرض: رأس ${w.header} حاوية ${w.main} إدخال ${w.input} بطاقة ${w.card} رد ${w.reply}${containerOk ? "" : ` (> ${MAX_CONTAINER_PX}+${MARGIN_PX})`}`);
+      // صفحة المنهجية (روابط المستودع وغيرها): لا تجاوز أفقي
+      await page.goto(`${BASE}/methodology`, { waitUntil: "networkidle", timeout: 90_000 });
+      const [msw, miw] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+      console.log(`${msw <= miw ? "✓" : "✗"} ${width}px /methodology: ${msw}/${miw}`);
+      if (msw > miw) failed++;
       if (!ok) {
         failed++;
         for (const o of after.over) console.log(`   متجاوز: ${o}`);
