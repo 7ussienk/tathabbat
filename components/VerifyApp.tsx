@@ -8,6 +8,9 @@ import { Disclaimer, Icon } from "@/components/ui";
 import type { VerifyResponse } from "@/lib/schemas/claim";
 
 const MAX_CHARS = 3000;
+/** حد الصوت (يطابق الخادم: lib/pipeline/normalize-input.ts) */
+const MAX_AUDIO_BYTES = 2 * 1024 * 1024;
+const AUDIO_ACCEPT = "audio/*,.ogg,.oga,.opus,.mp3,.m4a,.aac,.wav,.flac";
 
 /** أمثلة جاهزة تُعبّأ بنقرة (من حالات غير مصطنعة ولا مستبعدة من العرض: القاعدتان 14 و16). */
 const EXAMPLES: { label: string; text: string }[] = [
@@ -27,6 +30,44 @@ export function VerifyApp() {
   const [state, setState] = useState<State>({ phase: "idle" });
   const resultRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // استخراج النص من الصوت: يملأ مربع الرسالة فقط ولا يبدأ التحقق (يبدأ بـ«تثبّت» عبر المسار النصي)
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [audioErr, setAudioErr] = useState<ErrorInfo | null>(null);
+  const [fromAudio, setFromAudio] = useState(false);
+
+  async function onAudio(file: File) {
+    setAudioErr(null);
+    if (file.size > MAX_AUDIO_BYTES) {
+      setAudioErr({ message: "حجم المقطع أكبر من 2MB.", nextStep: "سجّل مقطعاً أقصر (الحد 30 ثانية) أو اقتصّ الجزء الذي فيه الحديث ثم أعد الرفع، أو اكتب الرسالة." });
+      return;
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 55_000);
+    setAudioBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/transcribe", { method: "POST", body: fd, signal: ctrl.signal });
+      const data = (await r.json()) as { status: string; text?: string; error?: { message_ar: string; next_step_ar: string } };
+      if (data.status === "ok" && data.text) {
+        setText(data.text.slice(0, MAX_CHARS));
+        setFromAudio(true);
+        setState({ phase: "idle" });
+      } else {
+        setAudioErr({ message: data.error?.message_ar ?? "حدث خطأ غير متوقع.", nextStep: data.error?.next_step_ar ?? "حاول مرة أخرى بعد قليل، أو اكتب الرسالة." });
+      }
+    } catch (e) {
+      setAudioErr(
+        (e as Error).name === "AbortError"
+          ? { message: "استغرق استخراج النص وقتاً أطول من المعتاد.", nextStep: "أعد المحاولة بمقطع أقصر، أو اكتب الرسالة." }
+          : { message: "تعذّر الاتصال بالخادم.", nextStep: "تحقق من اتصالك بالإنترنت ثم أعد المحاولة." },
+      );
+    } finally {
+      clearTimeout(timer);
+      setAudioBusy(false);
+    }
+  }
 
   async function submit() {
     const t = text.trim();
@@ -81,10 +122,52 @@ export function VerifyApp() {
       <Disclaimer />
 
       <section aria-labelledby="input-h" className="space-y-4 rounded-2xl border border-card bg-navy-deep p-4 sm:p-6">
-        <h2 id="input-h" className="text-lg font-semibold text-offwhite">
-          الصق الرسالة
-        </h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="input-h" className="text-lg font-semibold text-offwhite">
+            الصق الرسالة
+          </h2>
+          <input
+            ref={fileRef}
+            type="file"
+            accept={AUDIO_ACCEPT}
+            className="hidden"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void onAudio(f);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={audioBusy || busy}
+            aria-describedby="audio-hint"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-card px-4 text-base text-line hover:border-turquoise/60 hover:text-offwhite disabled:opacity-60"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5 shrink-0" aria-hidden="true">
+              <rect x="9" y="3" width="6" height="11" rx="3" />
+              <path d="M5 11a7 7 0 0014 0M12 18v3" />
+            </svg>
+            {audioBusy ? "جارٍ استخراج النص…" : "صوت"}
+          </button>
+        </div>
+        <p id="audio-hint" className="sr-only">
+          ارفع مقطعاً صوتياً (حتى 30 ثانية) لاستخراج نصه ومراجعته قبل التحقق
+        </p>
+        {audioBusy && (
+          <p role="status" className="text-sm text-line">
+            نستخرج النص من المقطع، لحظات…
+          </p>
+        )}
+        {audioErr && <ErrorBox message={audioErr.message} nextStep={audioErr.nextStep} />}
         <div>
+          {fromAudio && (
+            <p className="mb-2 text-sm text-turquoise" role="note">
+              نص مُستخرَج آلياً، راجعه وصحّحه قبل التحقق
+            </p>
+          )}
           <label htmlFor="msg" className="sr-only">
             نص الرسالة المراد التحقق منها
           </label>
@@ -92,7 +175,7 @@ export function VerifyApp() {
             id="msg"
             dir="rtl"
             value={text}
-            onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
+            onChange={(e) => { setText(e.target.value.slice(0, MAX_CHARS)); setAudioErr(null); }}
             rows={6}
             placeholder="مثال: قال رسول الله ﷺ: ..."
             className="w-full resize-y rounded-xl border border-card bg-navy p-4 text-lg leading-8 text-offwhite placeholder:text-muted-light"
@@ -105,14 +188,14 @@ export function VerifyApp() {
           <button
             type="button"
             onClick={submit}
-            disabled={busy}
+            disabled={busy || audioBusy}
             className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-turquoise px-8 text-lg font-semibold text-navy hover:opacity-90 disabled:opacity-60"
           >
             <Icon name="check" className="size-5" />
             {busy ? "جارٍ التحقق…" : "تثبّت"}
           </button>
           {text && !busy && (
-            <button type="button" onClick={() => { setText(""); setState({ phase: "idle" }); }} className="min-h-11 rounded-xl px-4 text-line underline underline-offset-4">
+            <button type="button" onClick={() => { setText(""); setFromAudio(false); setAudioErr(null); setState({ phase: "idle" }); }} className="min-h-11 rounded-xl px-4 text-line underline underline-offset-4">
               مسح
             </button>
           )}
@@ -124,7 +207,7 @@ export function VerifyApp() {
               <li key={ex.label}>
                 <button
                   type="button"
-                  onClick={() => { setText(ex.text); setState({ phase: "idle" }); }}
+                  onClick={() => { setText(ex.text); setFromAudio(false); setAudioErr(null); setState({ phase: "idle" }); }}
                   className="min-h-11 rounded-full border border-card px-4 text-base text-line hover:border-turquoise/60 hover:text-offwhite"
                 >
                   {ex.label}
