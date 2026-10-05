@@ -64,7 +64,8 @@ export async function handleTranscribe(req: Request, store: RateLimitStore = sha
   if (file.size > MAX_AUDIO_BYTES) return reject(audioRejection(null, file.size, null)!);
   const data = new Uint8Array(await file.arrayBuffer());
   const mime = sniffAudioMime(data, file.type);
-  const seconds = estimateAudioSeconds(data);
+  // 0 أو null ⟵ غير معروفة (تسجيلات MediaRecorder بلا مدة في الرأس): يبقى قياس التوكنز خط دفاع ثانياً
+  const seconds = estimateAudioSeconds(data) || null;
   const rejected = audioRejection(mime, data.length, seconds);
   if (rejected) return reject(rejected);
 

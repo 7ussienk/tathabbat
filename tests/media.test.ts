@@ -83,6 +83,17 @@ describe("/api/transcribe", () => {
     expect(llm.calls.map((c) => c.label)).toEqual(["transcribe"]);
   });
 
+  it("تسجيل المتصفح webm (EBML) بلا مدة في الرأس يُقبل ويُمرَّر كـ audio/webm", async () => {
+    const webm = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0, 0, 0, 0, 0, 0, 0]);
+    expect(sniffAudioMime(webm, "audio/webm;codecs=opus")).toBe("audio/webm");
+    expect(sniffAudioMime(webm, "")).toBe("audio/webm");
+    expect(estimateAudioSeconds(webm)).toBeNull();
+    const llm = clear();
+    const r = await post(new File([webm as unknown as BlobPart], "rec.webm", { type: "audio/webm;codecs=opus" }), { llm });
+    expect(r.status).toBe(200);
+    expect((llm.calls[0].input as { type: string; mime_type?: string }[])[0]).toMatchObject({ type: "audio", mime_type: "audio/webm" });
+  });
+
   it("نوع المتصفح الفارغ أو audio/opus لا يمنع القبول (يُستنتج من الرأس)", async () => {
     expect((await post(ogg(10, ""), { llm: clear() })).status).toBe(200);
     expect((await post(ogg(10, "audio/opus"), { llm: clear() })).status).toBe(200);

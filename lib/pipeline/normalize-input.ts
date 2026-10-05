@@ -15,7 +15,7 @@ export const MAX_AUDIO_SECONDS = 30;
 export const AUDIO_TOKENS_PER_SECOND = 32;
 
 /** صيغ واتساب الشائعة: ogg/opus (أندرويد)، m4a/mp4 (آيفون)، mp3، aac، wav، flac */
-export const AUDIO_MIMES = ["audio/ogg", "audio/mpeg", "audio/mp3", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/aac", "audio/wav", "audio/x-wav", "audio/flac"] as const;
+export const AUDIO_MIMES = ["audio/ogg", "audio/mpeg", "audio/mp3", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/aac", "audio/wav", "audio/x-wav", "audio/flac", "audio/webm"] as const;
 
 const TranscribeSchema = z.object({
   transcript: z.string(),
@@ -71,6 +71,7 @@ export function sniffAudioMime(bytes: Uint8Array, declared: string): string | nu
   if (s(0, 4) === "RIFF" && s(8, 4) === "WAVE") return "audio/wav";
   if (s(0, 4) === "fLaC") return "audio/flac";
   if (s(4, 4) === "ftyp") return "audio/mp4";
+  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return "audio/webm"; // EBML (webm من MediaRecorder)
   if (s(0, 3) === "ID3" || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) return (bytes[1] & 0x06) === 0 ? "audio/aac" : "audio/mpeg";
   const d = declared.split(";")[0].trim().toLowerCase();
   return (AUDIO_MIMES as readonly string[]).includes(d) ? d : null;
