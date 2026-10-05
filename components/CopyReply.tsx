@@ -45,7 +45,7 @@ export function CopyReply({ text }: { text: string }) {
           نسخ الرد الجاهز
         </button>
       </div>
-      <p className="whitespace-pre-line rounded-xl border border-card bg-card/30 p-4 text-base leading-8 text-line" dir="rtl">
+      <p className="min-w-0 max-w-full whitespace-pre-line break-words rounded-xl border border-card bg-card/30 p-4 text-base leading-8 text-line [overflow-wrap:anywhere]" dir="rtl">
         {text}
       </p>
       <p role="status" aria-live="polite" className="min-h-6 text-sm text-turquoise">

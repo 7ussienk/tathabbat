@@ -18,6 +18,7 @@
     "precheck": "tsx scripts/precheck.ts",
     "try-verify": "tsx scripts/try-verify.ts",
     "screenshots": "tsx scripts/screenshots.ts",
+    "guard:overflow": "tsx scripts/overflow-guard.ts",
     "eval": "tsx eval/run-eval.ts"
   },
   "dependencies": {
